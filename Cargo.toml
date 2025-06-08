@@ -1,0 +1,17 @@
+[package]
+name = "mcrs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.98"
+bytemuck = { version = "1.23.0", features = ["derive"] }
+cgmath = "0.18.0"
+glyphon = "0.9.0"
+image = { version = "0.25.6", features = ["png", "jpeg"] }
+instant = "0.1.13"
+log = "0.4.27"
+pollster = "0.4.0"
+rand = "0.9.1"
+wgpu = "25.0.2"
+winit = "0.30.11"

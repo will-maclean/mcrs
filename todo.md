@@ -1,0 +1,27 @@
+# TODO
+
+- [ ] Model support
+    - [ ] Obj models
+- [ ] Textures
+    - [ ] Texture Manager
+    - [ ] Block textures (different texture per side)
+    - [ ] Obj textures
+    - [ ] Spritesheet?
+- [ ] Coord/Camera cleanup
+    - [ ] Movement not aligned?
+- [ ] Chunks
+    - [ ] Chunk Manager
+        - [ ] Stores chunks
+        - [ ] Trigger chunk gen
+        - [ ] Controls when to render
+    - [ ] Gen
+        - [ ] Use noise in height maps
+        - [ ] biomes
+- [ ] Blocks
+    - [ ] Add different block types
+- [ ] QOL
+    - [ ] Debug screen
+        - [ ] Axis wireframe render
+        - [ ] Quick text (location, view, etc.)
+
+
