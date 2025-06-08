@@ -14,235 +14,18 @@ use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::PhysicalKey;
 use winit::window::{Window, WindowId};
 
+mod app;
 mod camera;
 mod chunk;
 mod debug_view;
+mod model;
 mod texture;
 
 pub async fn run() {
     let event_loop = EventLoop::new().unwrap();
 
-    let mut window_state = StateApplication::new();
+    let mut window_state = app::StateApplication::new();
     let _ = event_loop.run_app(&mut window_state);
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 3],
-    tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-            ],
-        }
-    }
-}
-
-#[rustfmt::skip]
-const SQUARE_VERTICES: &[Vertex] = &[
-     Vertex {position: [-0.5, -0.5, -0.5], tex_coords: [0.0, 0.0]},
-     Vertex {position: [-0.5, -0.5, 0.5], tex_coords: [0.0, 1.0]},
-     Vertex {position: [-0.5, 0.5, -0.5], tex_coords: [1.0, 0.0]},
-     Vertex {position: [-0.5, 0.5, 0.5], tex_coords: [1.0, 1.0]},
-     Vertex {position: [0.5, -0.5, -0.5], tex_coords: [0.0, 0.0]},
-     Vertex {position: [0.5, -0.5, 0.5], tex_coords: [0.0, 1.0]},
-     Vertex {position: [0.5, 0.5, -0.5], tex_coords: [1.0, 0.0]},
-     Vertex {position: [0.5, 0.5, 0.5], tex_coords: [1.0, 1.0]},
-];
-
-#[rustfmt::skip]
-const SQUARE_INDICES: &[u16] = &[
-    0, 6, 2,
-    0, 4, 6,
-    2, 7, 6,
-    2, 3, 7,
-    0, 3, 2,
-    0, 1, 3,
-    1, 7, 3,
-    1, 5, 7,
-    0, 4, 1,
-    1, 4, 5,
-    4, 6, 5,
-    5, 6, 7,
-];
-
-struct RenderInstance {
-    position: cgmath::Vector3<f32>,
-    rotation: cgmath::Quaternion<f32>,
-}
-
-impl RenderInstance {
-    fn to_raw(&self) -> RenderInstanceRaw {
-        RenderInstanceRaw {
-            model: (cgmath::Matrix4::from_translation(self.position)
-                * cgmath::Matrix4::from(self.rotation))
-            .into(),
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct RenderInstanceRaw {
-    model: [[f32; 4]; 4],
-}
-
-impl RenderInstanceRaw {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<RenderInstanceRaw>() as wgpu::BufferAddress,
-            // We need to switch from using a step mode of Vertex to Instance
-            // This means that our shaders will only change to use the next
-            // instance when the shader starts processing a new instance
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We need to define a slot
-                // for each vec4. We'll have to reassemble the mat4 in the shader.
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    // While our vertex shader only uses locations 0, and 1 now, in later tutorials, we'll
-                    // be using 2, 3, and 4, for Vertex. We'll start at slot 5, not conflict with them later
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-                    shader_location: 6,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                    shader_location: 7,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
-                    shader_location: 8,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-            ],
-        }
-    }
-}
-
-struct StateApplication {
-    state: Option<State>,
-}
-
-impl StateApplication {
-    pub fn new() -> Self {
-        Self { state: None }
-    }
-}
-
-impl ApplicationHandler for StateApplication {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window = event_loop
-            .create_window(Window::default_attributes().with_title("MCRS"))
-            .unwrap();
-        self.state = Some(State::new(window));
-    }
-
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        window_id: WindowId,
-        event: WindowEvent,
-    ) {
-        if let Some(state) = self.state.as_mut() {
-            if state.window.id() == window_id {
-                //TODO: is there anything to do with the return code??
-                let _ = state.input(&event);
-                match event {
-                    WindowEvent::CloseRequested => {
-                        event_loop.exit();
-                    }
-                    WindowEvent::Resized(physical_size) => {
-                        state.resize(physical_size);
-                        state.depth_texture = texture::Texture::create_depth_texture(
-                            &state.device,
-                            &state.config,
-                            "depth_texture",
-                        );
-                    }
-                    WindowEvent::RedrawRequested => {
-                        state.window.request_redraw();
-
-                        let now = instant::Instant::now();
-                        let dt = now - state.last_render_time;
-                        state.last_render_time = now;
-                        state.update(dt);
-                        state.camera.print_info();
-
-                        match state.render() {
-                            Ok(_) => {}
-                            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                                state.resize(state.size)
-                            }
-                            // The system is out of memory, we should probably quit
-                            Err(wgpu::SurfaceError::OutOfMemory | wgpu::SurfaceError::Other) => {
-                                log::error!("OutOfMemory");
-                                event_loop.exit();
-                            }
-
-                            // This happens when the a frame takes too long to present
-                            Err(wgpu::SurfaceError::Timeout) => {
-                                log::warn!("Surface timeout")
-                            }
-                        }
-                    }
-                    WindowEvent::MouseInput {
-                        device_id: _,
-                        state: btn_state,
-                        button,
-                    } => state.handle_mouse_button(button, btn_state.is_pressed()),
-                    WindowEvent::MouseWheel { delta, .. } => state.handle_mouse_scroll(&delta),
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    fn device_event(
-        &mut self,
-        _: &ActiveEventLoop,
-        _: winit::event::DeviceId,
-        event: winit::event::DeviceEvent,
-    ) {
-        if let Some(state) = self.state.as_mut() {
-            match event {
-                DeviceEvent::MouseMotion { delta: (dx, dy) } => {
-                    if state.mouse_pressed {
-                        state.camera_controller.process_mouse(dx, dy);
-                    }
-                }
-                _ => (),
-            }
-        }
-    }
-
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        let window = self.state.as_ref().unwrap().window();
-        window.request_redraw();
-    }
 }
 
 struct State {
@@ -251,7 +34,6 @@ struct State {
     queue: Queue,
     config: wgpu::SurfaceConfiguration,
     size: PhysicalSize<u32>,
-    window: Arc<Window>,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -264,13 +46,14 @@ struct State {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     projection: camera::Projection,
-    instances: Vec<RenderInstance>,
+    instances: Vec<model::RenderInstance>,
     instance_buffer: wgpu::Buffer,
     depth_texture: texture::Texture,
     mouse_pressed: bool,
     last_render_time: instant::Instant,
     chunk: chunk::Chunk,
     debug_view: debug_view::DebugView,
+    window: Arc<Window>,
 }
 
 impl State {
@@ -360,7 +143,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc(), RenderInstanceRaw::desc()],
+                buffers: &[model::Vertex::desc(), model::RenderInstanceRaw::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -378,11 +161,8 @@ impl State {
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
                 unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -403,13 +183,13 @@ impl State {
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(SQUARE_VERTICES),
+            contents: bytemuck::cast_slice(model::SQUARE_VERTICES),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(SQUARE_INDICES),
+            contents: bytemuck::cast_slice(model::SQUARE_INDICES),
             usage: wgpu::BufferUsages::INDEX,
         });
 
@@ -417,7 +197,7 @@ impl State {
 
         let instance_data = instances
             .iter()
-            .map(RenderInstance::to_raw)
+            .map(model::RenderInstance::to_raw)
             .collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
@@ -425,7 +205,8 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let debug_view = debug_view::DebugView::new(&device, &config, &queue);
+        let debug_view =
+            debug_view::DebugView::new(&device, &config, &queue, window_arc.scale_factor());
 
         Self {
             chunk,
@@ -438,7 +219,7 @@ impl State {
             render_pipeline,
             vertex_buffer,
             index_buffer,
-            n_indices: SQUARE_INDICES.len() as u32,
+            n_indices: model::SQUARE_INDICES.len() as u32,
             diffuse_bind_group,
             camera,
             camera_uniform,
@@ -629,10 +410,10 @@ impl State {
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.n_indices, 0, 0..self.instances.len() as _);
-
-            // self.debug_view
-            //     .render(&self.device, &self.config, &self.queue, &mut render_pass);
         }
+
+        self.debug_view
+            .render(&self.device, &self.config, &self.queue, &mut encoder, &view);
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
@@ -675,8 +456,6 @@ impl State {
         self.camera_controller.update_camera(&mut self.camera, dt);
         self.camera_uniform
             .update_view_proj(&self.camera, &self.projection);
-
-        println!("ViewProj: {:?}", self.camera_uniform.view_proj);
 
         self.queue.write_buffer(
             &self.camera_buffer,

@@ -1,4 +1,4 @@
-use crate::RenderInstance;
+use crate::model;
 use cgmath::prelude::*;
 
 const CHUNK_WIDTH: usize = 16;
@@ -26,7 +26,7 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    pub fn gen_instances(&self) -> Vec<RenderInstance> {
+    pub fn gen_instances(&self) -> Vec<model::RenderInstance> {
         self.blocks
             .iter()
             .flatten()
@@ -50,7 +50,7 @@ impl Chunk {
                     cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(0.0))
                 };
 
-                RenderInstance { position, rotation }
+                model::RenderInstance { position, rotation }
             })
             .collect::<Vec<_>>()
     }

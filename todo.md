@@ -22,6 +22,8 @@
 - [ ] QOL
     - [ ] Debug screen
         - [ ] Axis wireframe render
-        - [ ] Quick text (location, view, etc.)
-
-
+        - [x] Quick text (location, view, etc.)
+- Code refactor
+    - [ ] Strip out of state
+    - [x] Move out of lib
+    - [ ] Build a real game loop
