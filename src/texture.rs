@@ -2,7 +2,6 @@ use anyhow::*;
 use image::GenericImageView;
 
 pub struct Texture {
-    #[allow(unused)]
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
@@ -10,6 +9,7 @@ pub struct Texture {
 
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
     pub fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
