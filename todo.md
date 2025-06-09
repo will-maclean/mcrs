@@ -1,12 +1,17 @@
 # TODO
 
-- [ ] Model support
+- [x] Model support
     - [x] Obj models
 - [ ] Textures
     - [ ] Texture Manager
     - [ ] Block textures (different texture per side)
+        - Can do this using texture arrays in the shader. Mostly works as
+            normal, except i index into the texture array when rendering
+            a particular instance/texture. Shouldn't be too hard to set
+            up, but the number of texture indices to track will become
+            hard to do manually - will need the texture manager to handle
+            the indices.
     - [x] Obj textures
-    - [ ] Spritesheet?
 - [ ] Coord/Camera cleanup
     - [ ] Movement not aligned?
 - [ ] Chunks

@@ -182,7 +182,7 @@ impl CameraController {
         let dt = dt.as_secs_f32();
 
         // Move forward/backward and left/right
-        let (yaw_sin, yaw_cos) = camera.yaw.0.sin_cos();
+        let (yaw_sin, yaw_cos) = camera.yaw.sin_cos();
         let forward = Vector3::new(yaw_cos, yaw_sin, 0.0).normalize();
         let right = Vector3::new(-yaw_sin, yaw_cos, 0.0).normalize();
         camera.position += forward * (self.amount_forward - self.amount_backward) * self.speed * dt;
