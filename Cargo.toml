@@ -13,6 +13,7 @@ instant = "0.1.13"
 log = "0.4.27"
 pollster = "0.4.0"
 rand = "0.9.1"
+tobj = { version = "4.0.3", features = ["async", "tokio"] }
 wgpu = "25.0.2"
 winit = "0.30.11"
 
@@ -20,3 +21,4 @@ winit = "0.30.11"
 anyhow = "1.0"
 fs_extra = "1.2"
 glob = "0.3"
+

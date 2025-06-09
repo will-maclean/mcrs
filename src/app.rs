@@ -49,7 +49,7 @@ impl ApplicationHandler for StateApplication {
                         );
                     }
                     WindowEvent::RedrawRequested => {
-                        state.window.request_redraw();
+                        // state.window.request_redraw();
 
                         let now = instant::Instant::now();
                         let dt = now - state.last_render_time;
@@ -70,7 +70,8 @@ impl ApplicationHandler for StateApplication {
                         match state.render() {
                             Ok(_) => {}
                             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                                state.resize(state.size)
+                                // TODO: probably want to re-add size to the config
+                                // state.resize(state.config.size)
                             }
                             // The system is out of memory, we should probably quit
                             Err(wgpu::SurfaceError::OutOfMemory | wgpu::SurfaceError::Other) => {

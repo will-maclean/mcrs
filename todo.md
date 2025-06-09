@@ -1,11 +1,11 @@
 # TODO
 
 - [ ] Model support
-    - [ ] Obj models
+    - [x] Obj models
 - [ ] Textures
     - [ ] Texture Manager
     - [ ] Block textures (different texture per side)
-    - [ ] Obj textures
+    - [x] Obj textures
     - [ ] Spritesheet?
 - [ ] Coord/Camera cleanup
     - [ ] Movement not aligned?

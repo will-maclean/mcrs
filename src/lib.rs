@@ -19,9 +19,13 @@ mod camera;
 mod chunk;
 mod debug_view;
 mod model;
+mod resources;
 mod texture;
 
+use model::{DrawModel, Vertex};
+
 pub async fn run() {
+    println!("Starting MCRS");
     let event_loop = EventLoop::new().unwrap();
 
     let mut window_state = app::StateApplication::new();
@@ -33,13 +37,7 @@ struct State {
     device: Device,
     queue: Queue,
     config: wgpu::SurfaceConfiguration,
-    size: PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    n_indices: u32,
-    diffuse_bind_group: wgpu::BindGroup,
-    diffuse_texture: texture::Texture,
     camera: camera::Camera,
     camera_uniform: camera::CameraUniform,
     camera_controller: camera::CameraController,
@@ -54,6 +52,7 @@ struct State {
     chunk: chunk::Chunk,
     debug_view: debug_view::DebugView,
     window: Arc<Window>,
+    obj_model: model::Model,
 }
 
 impl State {
@@ -71,11 +70,6 @@ impl State {
 
         let depth_texture =
             texture::Texture::create_depth_texture(&device, &config, "depth_texture");
-
-        let diffuse_bytes = include_bytes!("../res/happy-tree.png");
-        let diffuse_texture =
-            texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "../res/happy-tree.png")
-                .unwrap();
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -99,21 +93,6 @@ impl State {
                 ],
                 label: Some("texture_bind_group_layout"),
             });
-
-        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-            label: Some("diffuse_bind_group"),
-        });
 
         surface.configure(&device, &config);
 
@@ -144,7 +123,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[model::Vertex::desc(), model::RenderInstanceRaw::desc()],
+                buffers: &[model::ModelVertex::desc(), model::RenderInstanceRaw::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -182,18 +161,6 @@ impl State {
             cache: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(model::SQUARE_VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(model::SQUARE_INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
         let instances = chunk.gen_instances();
 
         let instance_data = instances
@@ -206,6 +173,14 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+        let obj_model = pollster::block_on(resources::load_model(
+            "cube.obj",
+            &device,
+            &queue,
+            &texture_bind_group_layout,
+        ))
+        .unwrap();
+
         let debug_view =
             debug_view::DebugView::new(&device, &config, &queue, window_arc.scale_factor());
 
@@ -215,16 +190,10 @@ impl State {
             device,
             queue,
             config,
-            size,
             window: window_arc,
             render_pipeline,
-            vertex_buffer,
-            index_buffer,
-            n_indices: model::SQUARE_INDICES.len() as u32,
-            diffuse_bind_group,
             camera,
             camera_uniform,
-            diffuse_texture,
             camera_buffer,
             camera_bind_group,
             camera_controller: camera::CameraController::new(1.0, 0.4),
@@ -235,6 +204,7 @@ impl State {
             last_render_time: instant::Instant::now(),
             mouse_pressed: false,
             debug_view,
+            obj_model,
         }
     }
 
@@ -351,8 +321,6 @@ impl State {
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        self.size = new_size;
-
         self.config.width = new_size.width;
         self.config.height = new_size.height;
 
@@ -404,13 +372,13 @@ impl State {
                 timestamp_writes: None,
             });
 
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.n_indices, 0, 0..self.instances.len() as _);
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.draw_model_instanced(
+                &self.obj_model,
+                0..self.instances.len() as u32,
+                &self.camera_bind_group,
+            );
         }
 
         self.debug_view
