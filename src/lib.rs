@@ -1,6 +1,8 @@
+use std::fs;
 use std::sync::Arc;
 
 use pollster::FutureExt;
+use texture::{Texture, TextureManager};
 use wgpu::util::DeviceExt;
 use wgpu::{Adapter, Device, Instance, PresentMode, Queue, Surface, SurfaceCapabilities};
 use winit::application::ApplicationHandler;
@@ -22,7 +24,7 @@ mod model;
 mod resources;
 mod texture;
 
-use model::{DrawModel, Vertex};
+use model::Vertex;
 
 pub async fn run() {
     println!("Starting MCRS");
@@ -46,13 +48,15 @@ struct State {
     projection: camera::Projection,
     instances: Vec<model::RenderInstance>,
     instance_buffer: wgpu::Buffer,
-    depth_texture: texture::Texture,
+    // depth_texture: texture::Texture,
     mouse_pressed: bool,
     last_render_time: instant::Instant,
     chunk: chunk::Chunk,
     debug_view: debug_view::DebugView,
     window: Arc<Window>,
     obj_model: model::Model,
+    texture_manager: texture::TextureManager,
+    texture_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -68,31 +72,29 @@ impl State {
         let surface_caps = surface.get_capabilities(&adapter);
         let config = Self::create_surface_config(size, surface_caps);
 
-        let depth_texture =
-            texture::Texture::create_depth_texture(&device, &config, "depth_texture");
+        let mut texture_manager_builder = texture::TextureManagerBuilder::new(None, None);
+        texture_manager_builder.add_texture(
+            "stone",
+            texture::Texture::from_image(
+                "stone",
+                &image::load_from_memory(&fs::read("res/cube-diffuse.jpg").unwrap()).unwrap(),
+            ),
+        );
 
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
+        texture_manager_builder.add_texture(
+            "weird",
+            texture::Texture::from_image(
+                "weird",
+                &image::load_from_memory(&fs::read("res/cube-normal.png").unwrap()).unwrap(),
+            ),
+        );
+
+        let texture_manager = TextureManager::from(texture_manager_builder);
+        let (texture_bind_group, texture_bind_group_layout) =
+            texture_manager.create_and_submit_texture_array(&device, &queue);
+
+        // let depth_texture =
+        //     texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
         surface.configure(&device, &config);
 
@@ -145,13 +147,7 @@ impl State {
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: texture::Texture::DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
+            depth_stencil: None,
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -165,21 +161,16 @@ impl State {
 
         let instance_data = instances
             .iter()
-            .map(model::RenderInstance::to_raw)
+            .map(|x| x.to_raw(&texture_manager))
             .collect::<Vec<_>>();
+
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
             contents: bytemuck::cast_slice(&instance_data),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let obj_model = pollster::block_on(resources::load_model(
-            "cube.obj",
-            &device,
-            &queue,
-            &texture_bind_group_layout,
-        ))
-        .unwrap();
+        let obj_model = pollster::block_on(resources::load_model("cube.obj", &device)).unwrap();
 
         let debug_view =
             debug_view::DebugView::new(&device, &config, &queue, window_arc.scale_factor());
@@ -199,12 +190,13 @@ impl State {
             camera_controller: camera::CameraController::new(1.0, 0.4),
             instances,
             instance_buffer,
-            depth_texture,
             projection,
             last_render_time: instant::Instant::now(),
             mouse_pressed: false,
             debug_view,
             obj_model,
+            texture_manager,
+            texture_bind_group,
         }
     }
 
@@ -359,26 +351,23 @@ impl State {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                // depth_stencil_attachment: None, // Uncomment if you want to use depth testing
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
+                //TODO: fix depth testing
+                depth_stencil_attachment: None, // Uncomment if you want to use depth testing
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
 
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw_model_instanced(
-                &self.obj_model,
-                0..self.instances.len() as u32,
-                &self.camera_bind_group,
-            );
+
+            for mesh in &self.obj_model.meshes {
+                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
+                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+                render_pass.draw_indexed(0..mesh.n_elements, 0, 0..self.instances.len() as u32);
+            }
         }
 
         self.debug_view

@@ -8,6 +8,16 @@ const BOTTOM_DEPTH: i32 = -128;
 #[derive(Debug, Clone, Copy)]
 pub enum BlockType {
     Dirt,
+    Weird,
+}
+
+impl BlockType {
+    fn tex_label(&self) -> &'static str {
+        match self {
+            Self::Dirt => "stone",
+            Self::Weird => "weird",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -51,6 +61,8 @@ impl Chunk {
                     position,
                     rotation,
                     scale,
+                    //TODO: faster if we can use the static strings everywhere
+                    label: c.block_type.tex_label().to_string(),
                 }
             })
             .collect::<Vec<_>>()
@@ -67,9 +79,15 @@ impl Chunk {
 
         for i in 0..CHUNK_WIDTH {
             for j in 0..CHUNK_WIDTH {
+                let block_type = if (i + j) % 2 == 0 {
+                    BlockType::Dirt
+                } else {
+                    BlockType::Weird
+                };
+
                 for k in 0..solid_fill_height {
                     chunk.blocks[k][j][i] = Some(Block {
-                        block_type: BlockType::Dirt,
+                        block_type,
                         origin_x: i as i32,
                         origin_y: j as i32,
                         origin_z: k as i32,
@@ -81,7 +99,7 @@ impl Chunk {
                     if rand::random_ratio(4, 10) {
                         if let Some(_) = chunk.blocks[k - 1][j][i] {
                             chunk.blocks[k][j][i] = Some(Block {
-                                block_type: BlockType::Dirt,
+                                block_type,
                                 origin_x: i as i32,
                                 origin_y: j as i32,
                                 origin_z: k as i32,

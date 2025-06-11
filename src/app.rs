@@ -42,11 +42,12 @@ impl ApplicationHandler for StateApplication {
                     }
                     WindowEvent::Resized(physical_size) => {
                         state.resize(physical_size);
-                        state.depth_texture = texture::Texture::create_depth_texture(
-                            &state.device,
-                            &state.config,
-                            "depth_texture",
-                        );
+                        // TODO: bring back when fixing depth textures
+                        // state.depth_texture = texture::Texture::create_depth_texture(
+                        //    &state.device,
+                        //    &state.config,
+                        //    "depth_texture",
+                        // );
                     }
                     WindowEvent::RedrawRequested => {
                         // state.window.request_redraw();

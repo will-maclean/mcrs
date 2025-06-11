@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use crate::texture;
 
 pub trait Vertex {
@@ -21,16 +19,19 @@ impl Vertex for ModelVertex {
             array_stride: mem::size_of::<ModelVertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
+                // position
                 wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 0,
                     format: wgpu::VertexFormat::Float32x3,
                 },
+                // tex_coords
                 wgpu::VertexAttribute {
                     offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x2,
                 },
+                // normal
                 wgpu::VertexAttribute {
                     offset: mem::size_of::<[f32; 5]>() as wgpu::BufferAddress,
                     shader_location: 2,
@@ -43,13 +44,6 @@ impl Vertex for ModelVertex {
 
 pub struct Model {
     pub meshes: Vec<Mesh>,
-    pub materials: Vec<Material>,
-}
-
-pub struct Material {
-    pub name: String,
-    pub diffuse_texture: texture::Texture,
-    pub bind_group: wgpu::BindGroup,
 }
 
 pub struct Mesh {
@@ -57,92 +51,23 @@ pub struct Mesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub n_elements: u32,
-    pub material: usize,
-}
-
-pub trait DrawModel<'a> {
-    fn draw_mesh(
-        &mut self,
-        mesh: &'a Mesh,
-        material: &'a Material,
-        camera_bind_group: &'a wgpu::BindGroup,
-    );
-
-    fn draw_mesh_instanced(
-        &mut self,
-        mesh: &'a Mesh,
-        material: &'a Material,
-        instances: Range<u32>,
-        camera_bind_group: &'a wgpu::BindGroup,
-    );
-
-    fn draw_model(&mut self, model: &'a Model, camera_bind_group: &'a wgpu::BindGroup);
-
-    fn draw_model_instanced(
-        &mut self,
-        model: &'a Model,
-        instances: Range<u32>,
-        camera_bind_group: &'a wgpu::BindGroup,
-    );
-}
-
-impl<'a, 'b> DrawModel<'b> for wgpu::RenderPass<'a>
-where
-    'b: 'a,
-{
-    fn draw_mesh(
-        &mut self,
-        mesh: &'b Mesh,
-        material: &'b Material,
-        camera_bind_group: &'b wgpu::BindGroup,
-    ) {
-        self.draw_mesh_instanced(mesh, material, 0..1, camera_bind_group);
-    }
-
-    fn draw_mesh_instanced(
-        &mut self,
-        mesh: &'b Mesh,
-        material: &'b Material,
-        instances: Range<u32>,
-        camera_bind_group: &'b wgpu::BindGroup,
-    ) {
-        self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-        self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        self.set_bind_group(0, &material.bind_group, &[]);
-        self.set_bind_group(1, camera_bind_group, &[]);
-        self.draw_indexed(0..mesh.n_elements, 0, instances);
-    }
-
-    fn draw_model(&mut self, model: &'b Model, camera_bind_group: &'b wgpu::BindGroup) {
-        self.draw_model_instanced(model, 0..1, camera_bind_group);
-    }
-
-    fn draw_model_instanced(
-        &mut self,
-        model: &'b Model,
-        instances: Range<u32>,
-        camera_bind_group: &'b wgpu::BindGroup,
-    ) {
-        for mesh in &model.meshes {
-            let material = &model.materials[mesh.material];
-            self.draw_mesh_instanced(mesh, material, instances.clone(), camera_bind_group);
-        }
-    }
 }
 
 pub struct RenderInstance {
     pub position: cgmath::Vector3<f32>,
     pub rotation: cgmath::Quaternion<f32>,
     pub scale: f32,
+    pub label: String,
 }
 
 impl RenderInstance {
-    pub fn to_raw(&self) -> RenderInstanceRaw {
+    pub fn to_raw(&self, texture_manger: &texture::TextureManager) -> RenderInstanceRaw {
         RenderInstanceRaw {
             model: (cgmath::Matrix4::from_translation(self.position)
                 * cgmath::Matrix4::from(self.rotation)
                 * cgmath::Matrix4::from_scale(self.scale))
             .into(),
+            tex_idx: texture_manger.lookup_idx(&self.label).unwrap() as u32,
         }
     }
 }
@@ -151,6 +76,7 @@ impl RenderInstance {
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct RenderInstanceRaw {
     model: [[f32; 4]; 4],
+    tex_idx: u32,
 }
 
 impl RenderInstanceRaw {
@@ -186,6 +112,12 @@ impl RenderInstanceRaw {
                     offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
                     shader_location: 8,
                     format: wgpu::VertexFormat::Float32x4,
+                },
+                // texture idx
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
+                    shader_location: 9,
+                    format: wgpu::VertexFormat::Uint32,
                 },
             ],
         }
