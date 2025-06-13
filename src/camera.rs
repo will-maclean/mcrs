@@ -10,6 +10,14 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_co
     cgmath::Vector4::new(0.0, 0.0, 0.5, 1.0),
 );
 
+#[rustfmt::skip]
+pub const WGPU_TO_WORLD_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
+    cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
+    cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
+    cgmath::Vector4::new(0.0, 0.0, -1.0, 0.0),
+    cgmath::Vector4::new(0.0, 0.0, 0.0, 1.0),
+);
+
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
 pub struct Camera {
@@ -95,7 +103,9 @@ impl CameraUniform {
 
     pub fn update_view_proj(&mut self, camera: &Camera, projection: &Projection) {
         // self.view_position = camera.position.to_homogeneous().into();
-        self.view_proj = (projection.calc_matrix() * camera.calc_matrix()).into();
+        self.view_proj =
+            (projection.calc_matrix() * WGPU_TO_WORLD_MATRIX.transpose() * camera.calc_matrix())
+                .into();
     }
 }
 
@@ -111,6 +121,8 @@ pub struct CameraController {
     scroll: f32,
     sensitivity: f32,
     speed: f32,
+    pub forward: Vector3<f32>,
+    pub right: Vector3<f32>,
 }
 
 impl CameraController {
@@ -127,6 +139,8 @@ impl CameraController {
             rotate_horizontal: 0.0,
             rotate_vertical: 0.0,
             scroll: 0.0,
+            forward: Vector3::zero(),
+            right: Vector3::zero(),
         }
     }
 
@@ -183,10 +197,11 @@ impl CameraController {
 
         // Move forward/backward and left/right
         let (yaw_sin, yaw_cos) = camera.yaw.sin_cos();
-        let forward = Vector3::new(yaw_cos, yaw_sin, 0.0).normalize();
-        let right = Vector3::new(-yaw_sin, yaw_cos, 0.0).normalize();
-        camera.position += forward * (self.amount_forward - self.amount_backward) * self.speed * dt;
-        camera.position += right * (self.amount_right - self.amount_left) * self.speed * dt;
+        self.forward = Vector3::new(yaw_cos, yaw_sin, 0.0).normalize();
+        self.right = Vector3::new(-yaw_sin, yaw_cos, 0.0).normalize();
+        camera.position +=
+            self.forward * (self.amount_forward - self.amount_backward) * self.speed * dt;
+        camera.position += self.right * (self.amount_right - self.amount_left) * self.speed * dt;
 
         // Move in/out (aka. "zoom")
         // Note: this isn't an actual zoom. The camera's position

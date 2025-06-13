@@ -116,7 +116,7 @@ impl DebugView {
                     left: 0,
                     top: 0,
                     right: 600,
-                    bottom: 160,
+                    bottom: 600,
                 },
                 default_color: Color::rgb(255, 255, 255),
                 custom_glyphs: &[],

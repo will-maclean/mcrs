@@ -1,15 +1,13 @@
-use crate::texture;
 use crate::State;
 
 use wgpu::{Adapter, Device, Instance, PresentMode, Queue, Surface, SurfaceCapabilities};
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
-use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowId};
 
 pub struct StateApplication {
-    state: Option<State>,
+    pub state: Option<State>,
 }
 
 impl StateApplication {
@@ -18,7 +16,7 @@ impl StateApplication {
     }
 }
 
-impl ApplicationHandler for StateApplication {
+impl<T: 'static> ApplicationHandler<T> for StateApplication {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = event_loop
             .create_window(Window::default_attributes().with_title("MCRS"))
@@ -48,43 +46,6 @@ impl ApplicationHandler for StateApplication {
                         //    &state.config,
                         //    "depth_texture",
                         // );
-                    }
-                    WindowEvent::RedrawRequested => {
-                        // state.window.request_redraw();
-
-                        let now = instant::Instant::now();
-                        let dt = now - state.last_render_time;
-                        state.last_render_time = now;
-                        state.update(dt);
-                        state.debug_view.update_text(
-                            format!(
-                                "Debug View\nCamera pos: ({:.2}, {:.2}, {:.2})\nPitch: {:?}, Yaw: {:?}",
-                                state.camera.position.x,
-                                state.camera.position.y,
-                                state.camera.position.z,
-                                state.camera.pitch,
-                                state.camera.yaw,
-                            )
-                            .as_str(),
-                        );
-
-                        match state.render() {
-                            Ok(_) => {}
-                            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                                // TODO: probably want to re-add size to the config
-                                // state.resize(state.config.size)
-                            }
-                            // The system is out of memory, we should probably quit
-                            Err(wgpu::SurfaceError::OutOfMemory | wgpu::SurfaceError::Other) => {
-                                log::error!("OutOfMemory");
-                                event_loop.exit();
-                            }
-
-                            // This happens when the a frame takes too long to present
-                            Err(wgpu::SurfaceError::Timeout) => {
-                                log::warn!("Surface timeout")
-                            }
-                        }
                     }
                     WindowEvent::MouseInput {
                         device_id: _,

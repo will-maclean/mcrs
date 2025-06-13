@@ -1,37 +1,38 @@
 use std::fs;
 use std::sync::Arc;
 
+use log::info;
 use pollster::FutureExt;
-use texture::{Texture, TextureManager};
+use texture::TextureManager;
 use wgpu::util::DeviceExt;
 use wgpu::{Adapter, Device, Instance, PresentMode, Queue, Surface, SurfaceCapabilities};
-use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
+use winit::event::ElementState;
 use winit::event::KeyEvent;
 use winit::event::MouseButton;
 use winit::event::MouseScrollDelta;
 use winit::event::WindowEvent;
-use winit::event::{DeviceEvent, ElementState};
-use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::event_loop::EventLoop;
 use winit::keyboard::PhysicalKey;
-use winit::window::{Window, WindowId};
+use winit::window::Window;
 
-mod app;
+pub mod app;
 mod camera;
 mod chunk;
 mod debug_view;
+pub mod game;
 mod model;
 mod resources;
 mod texture;
 
 use model::Vertex;
 
-pub async fn run() {
-    println!("Starting MCRS");
+pub fn run() {
+    info!("Starting MCRS");
     let event_loop = EventLoop::new().unwrap();
-
-    let mut window_state = app::StateApplication::new();
-    let _ = event_loop.run_app(&mut window_state);
+    let window_state = app::StateApplication::new();
+    let mut game = game::MCRS::new(window_state, event_loop);
+    game.run();
 }
 
 struct State {
@@ -50,9 +51,8 @@ struct State {
     instance_buffer: wgpu::Buffer,
     // depth_texture: texture::Texture,
     mouse_pressed: bool,
-    last_render_time: instant::Instant,
     chunk: chunk::Chunk,
-    debug_view: debug_view::DebugView,
+    pub debug_view: debug_view::DebugView,
     window: Arc<Window>,
     obj_model: model::Model,
     texture_manager: texture::TextureManager,
@@ -170,7 +170,8 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let obj_model = pollster::block_on(resources::load_model("cube.obj", &device)).unwrap();
+        let obj_model =
+            pollster::block_on(resources::load_model("simple_cube.obj", &device)).unwrap();
 
         let debug_view =
             debug_view::DebugView::new(&device, &config, &queue, window_arc.scale_factor());
@@ -191,7 +192,6 @@ impl State {
             instances,
             instance_buffer,
             projection,
-            last_render_time: instant::Instant::now(),
             mouse_pressed: false,
             debug_view,
             obj_model,
