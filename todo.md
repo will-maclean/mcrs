@@ -24,8 +24,8 @@
     - [ ] Debug screen
         - [ ] Axis wireframe render
         - [x] Quick text (location, view, etc.)
-    - [ ] Logging
+    - [x] Logging
 - Code refactor
-    - [ ] Strip out of state
+    - [ ] Strip out of state -> into game::MCRS??
     - [x] Move out of lib
-    - [ ] Build a real game loop
+    - [x] Build a real game loop

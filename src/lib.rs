@@ -13,7 +13,7 @@ use winit::event::MouseButton;
 use winit::event::MouseScrollDelta;
 use winit::event::WindowEvent;
 use winit::event_loop::EventLoop;
-use winit::keyboard::PhysicalKey;
+use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
 
 pub mod app;
@@ -49,19 +49,24 @@ struct State {
     projection: camera::Projection,
     instances: Vec<model::RenderInstance>,
     instance_buffer: wgpu::Buffer,
-    // depth_texture: texture::Texture,
+    depth_texture: texture::DepthTexture,
     mouse_pressed: bool,
-    chunk: chunk::Chunk,
+    chunk_manager: chunk::ChunkManager,
     pub debug_view: debug_view::DebugView,
     window: Arc<Window>,
     obj_model: model::Model,
     texture_manager: texture::TextureManager,
     texture_bind_group: wgpu::BindGroup,
+    pub running: bool,
 }
 
 impl State {
     pub fn new(window: Window) -> Self {
         let chunk = chunk::Chunk::gen_default_chunk(-8, -8);
+        let chunk_manager = chunk::ChunkManager {
+            chunks: vec![chunk],
+            config: Default::default(),
+        };
 
         let window_arc = Arc::new(window);
         let size = window_arc.inner_size();
@@ -97,6 +102,8 @@ impl State {
         //     texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
         surface.configure(&device, &config);
+
+        let depth_texture = texture::DepthTexture::new(&device, &config, "depth_texture");
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -141,13 +148,19 @@ impl State {
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
+                front_face: wgpu::FrontFace::Cw,
                 cull_mode: Some(wgpu::Face::Back),
                 polygon_mode: wgpu::PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: texture::DepthTexture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -157,7 +170,7 @@ impl State {
             cache: None,
         });
 
-        let instances = chunk.gen_instances();
+        let instances = chunk_manager.gen_instances();
 
         let instance_data = instances
             .iter()
@@ -177,7 +190,7 @@ impl State {
             debug_view::DebugView::new(&device, &config, &queue, window_arc.scale_factor());
 
         Self {
-            chunk,
+            chunk_manager,
             surface,
             device,
             queue,
@@ -186,6 +199,7 @@ impl State {
             render_pipeline,
             camera,
             camera_uniform,
+            depth_texture,
             camera_buffer,
             camera_bind_group,
             camera_controller: camera::CameraController::new(1.0, 0.4),
@@ -197,6 +211,7 @@ impl State {
             obj_model,
             texture_manager,
             texture_bind_group,
+            running: true,
         }
     }
 
@@ -351,8 +366,14 @@ impl State {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                //TODO: fix depth testing
-                depth_stencil_attachment: None, // Uncomment if you want to use depth testing
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
@@ -375,6 +396,7 @@ impl State {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+        // self.window.request_redraw();
 
         Ok(())
     }
@@ -383,8 +405,16 @@ impl State {
         &self.window
     }
 
-    fn input(&mut self, event: &WindowEvent) -> bool {
+    fn input(&mut self, event: &WindowEvent) {
         match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(KeyCode::Escape),
+                        ..
+                    },
+                ..
+            } => self.running = false,
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
@@ -396,7 +426,6 @@ impl State {
             } => self.camera_controller.process_keyboard(*key, *state),
             WindowEvent::MouseWheel { delta, .. } => {
                 self.camera_controller.process_scroll(delta);
-                true
             }
             WindowEvent::MouseInput {
                 button: MouseButton::Left,
@@ -404,13 +433,13 @@ impl State {
                 ..
             } => {
                 self.mouse_pressed = *state == ElementState::Pressed;
-                true
             }
-            _ => false,
+            _ => (),
         }
     }
 
-    fn update(&mut self, dt: instant::Duration) {
+    pub fn update(&mut self, dt: instant::Duration) {
+        self.chunk_manager.update(self.camera.position);
         self.camera_controller.update_camera(&mut self.camera, dt);
         self.camera_uniform
             .update_view_proj(&self.camera, &self.projection);

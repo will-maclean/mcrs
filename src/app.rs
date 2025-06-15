@@ -1,4 +1,4 @@
-use crate::State;
+use crate::{texture, State};
 
 use wgpu::{Adapter, Device, Instance, PresentMode, Queue, Surface, SurfaceCapabilities};
 use winit::application::ApplicationHandler;
@@ -32,20 +32,19 @@ impl<T: 'static> ApplicationHandler<T> for StateApplication {
     ) {
         if let Some(state) = self.state.as_mut() {
             if state.window.id() == window_id {
-                //TODO: is there anything to do with the return code??
                 let _ = state.input(&event);
                 match event {
                     WindowEvent::CloseRequested => {
                         event_loop.exit();
+                        state.running = false;
                     }
                     WindowEvent::Resized(physical_size) => {
                         state.resize(physical_size);
-                        // TODO: bring back when fixing depth textures
-                        // state.depth_texture = texture::Texture::create_depth_texture(
-                        //    &state.device,
-                        //    &state.config,
-                        //    "depth_texture",
-                        // );
+                        state.depth_texture = texture::DepthTexture::new(
+                            &state.device,
+                            &state.config,
+                            "depth_texture",
+                        );
                     }
                     WindowEvent::MouseInput {
                         device_id: _,
@@ -53,6 +52,9 @@ impl<T: 'static> ApplicationHandler<T> for StateApplication {
                         button,
                     } => state.handle_mouse_button(button, btn_state.is_pressed()),
                     WindowEvent::MouseWheel { delta, .. } => state.handle_mouse_scroll(&delta),
+                    WindowEvent::RedrawRequested => {
+                        log::debug!("Redraw request event being handled")
+                    }
                     _ => {}
                 }
             }

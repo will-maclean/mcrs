@@ -9,6 +9,7 @@ pub struct MCRS<T: 'static> {
     last_render_time: instant::Instant,
     last_update_time: instant::Instant,
     event_loop: EventLoop<T>,
+    running: bool,
 }
 
 impl<T> MCRS<T> {
@@ -20,6 +21,7 @@ impl<T> MCRS<T> {
             event_loop,
             last_render_time: Instant::now(),
             last_update_time: Instant::now(),
+            running: true,
         }
     }
 
@@ -31,39 +33,47 @@ impl<T> MCRS<T> {
         let mut prev_time = instant::Instant::now();
         let mut accum_time = Duration::ZERO;
 
-        loop {
+        while self.running {
             let curr_time = instant::Instant::now();
             let elapsed_time = curr_time - prev_time;
             prev_time = curr_time;
             accum_time += elapsed_time;
 
-            // Let's arbitrarily say 1/3 of the desired tick
-            // time is devoted to processing inputs. No idea if
-            // this is adequately smart or completely stupid.
-            self.input(update_timestep / 3);
+            self.running &= self.input();
 
             while accum_time >= update_timestep {
-                let _ = self.update();
+                self.running &= self.update();
 
                 accum_time -= update_timestep;
             }
 
             let _ = self.render();
         }
+
+        self.close();
     }
 
-    fn input(&mut self, duration: Duration) {
-        let start = Instant::now();
+    fn input(&mut self) -> bool {
+        self.event_loop.pump_app_events(None, &mut self.state_app);
 
-        while (Instant::now() - start) > duration {
-            let _ = self
-                .event_loop
-                .pump_app_events(Some(Duration::ZERO), &mut self.state_app);
+        if let Some(state) = self.state_app.state.as_ref() {
+            return state.running;
         }
+
+        false
     }
 
-    fn update(&mut self) -> Result<(), ()> {
-        Ok(())
+    fn update(&mut self) -> bool {
+        if let Some(state) = self.state_app.state.as_mut() {
+            let now = instant::Instant::now();
+            let dt = now - self.last_update_time;
+            self.last_update_time = now;
+
+            state.update(dt);
+
+            return state.running;
+        }
+        false
     }
 
     fn render(&mut self) -> Result<(), ()> {
@@ -110,4 +120,6 @@ impl<T> MCRS<T> {
             Err(())
         }
     }
+
+    fn close(&mut self) {}
 }

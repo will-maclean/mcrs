@@ -12,9 +12,9 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_co
 
 #[rustfmt::skip]
 pub const WGPU_TO_WORLD_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
-    cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
+    cgmath::Vector4::new(0.0, 0.0, 1.0, 0.0),
     cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
-    cgmath::Vector4::new(0.0, 0.0, -1.0, 0.0),
+    cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
     cgmath::Vector4::new(0.0, 0.0, 0.0, 1.0),
 );
 
@@ -40,7 +40,7 @@ impl Camera {
     }
 
     pub fn calc_matrix(&self) -> Matrix4<f32> {
-        Matrix4::look_to_rh(self.position, self.front(), Vector3::unit_y())
+        Matrix4::look_to_rh(self.position, self.front(), Vector3::unit_z())
     }
 
     pub fn print_info(&self) {
@@ -54,7 +54,7 @@ impl Camera {
         let (sin_pitch, cos_pitch) = self.pitch.0.sin_cos();
         let (sin_yaw, cos_yaw) = self.yaw.0.sin_cos();
 
-        Vector3::new(cos_pitch * sin_yaw, sin_pitch, cos_pitch * cos_yaw).normalize()
+        Vector3::new(cos_pitch * sin_yaw, cos_pitch * cos_yaw, sin_pitch).normalize()
     }
 }
 
@@ -87,7 +87,6 @@ impl Projection {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct CameraUniform {
-    // view_position: [f32; 4],
     pub view_proj: [[f32; 4]; 4],
 }
 
@@ -96,16 +95,13 @@ impl CameraUniform {
         use cgmath::SquareMatrix;
 
         Self {
-            // view_position: [0.0; 4],
             view_proj: cgmath::Matrix4::identity().into(),
         }
     }
 
     pub fn update_view_proj(&mut self, camera: &Camera, projection: &Projection) {
-        // self.view_position = camera.position.to_homogeneous().into();
         self.view_proj =
-            (projection.calc_matrix() * WGPU_TO_WORLD_MATRIX.transpose() * camera.calc_matrix())
-                .into();
+            (projection.calc_matrix() * WGPU_TO_WORLD_MATRIX * camera.calc_matrix()).into();
     }
 }
 
@@ -144,7 +140,7 @@ impl CameraController {
         }
     }
 
-    pub fn process_keyboard(&mut self, key: KeyCode, state: ElementState) -> bool {
+    pub fn process_keyboard(&mut self, key: KeyCode, state: ElementState) {
         let amount = if state == ElementState::Pressed {
             1.0
         } else {
@@ -154,29 +150,23 @@ impl CameraController {
         match key {
             KeyCode::KeyW | KeyCode::ArrowUp => {
                 self.amount_forward = amount;
-                true
             }
             KeyCode::KeyS | KeyCode::ArrowDown => {
                 self.amount_backward = amount;
-                true
             }
             KeyCode::KeyA | KeyCode::ArrowLeft => {
                 self.amount_left = amount;
-                true
             }
             KeyCode::KeyD | KeyCode::ArrowRight => {
                 self.amount_right = amount;
-                true
             }
             KeyCode::Space => {
                 self.amount_up = amount;
-                true
             }
             KeyCode::ShiftLeft => {
                 self.amount_down = amount;
-                true
             }
-            _ => false,
+            _ => (),
         }
     }
 
@@ -185,12 +175,7 @@ impl CameraController {
         self.rotate_vertical = mouse_dy as f32;
     }
 
-    pub fn process_scroll(&mut self, delta: &MouseScrollDelta) {
-        self.scroll = -match delta {
-            MouseScrollDelta::LineDelta(_, scroll) => scroll * 100.0,
-            MouseScrollDelta::PixelDelta(PhysicalPosition { y: scroll, .. }) => *scroll as f32,
-        };
-    }
+    pub fn process_scroll(&mut self, _delta: &MouseScrollDelta) {}
 
     pub fn update_camera(&mut self, camera: &mut Camera, dt: Duration) {
         let dt = dt.as_secs_f32();
@@ -198,23 +183,10 @@ impl CameraController {
         // Move forward/backward and left/right
         let (yaw_sin, yaw_cos) = camera.yaw.sin_cos();
         self.forward = Vector3::new(yaw_cos, yaw_sin, 0.0).normalize();
-        self.right = Vector3::new(-yaw_sin, yaw_cos, 0.0).normalize();
+        self.right = Vector3::new(yaw_sin, yaw_cos, 0.0).normalize();
         camera.position +=
             self.forward * (self.amount_forward - self.amount_backward) * self.speed * dt;
         camera.position += self.right * (self.amount_right - self.amount_left) * self.speed * dt;
-
-        // Move in/out (aka. "zoom")
-        // Note: this isn't an actual zoom. The camera's position
-        // changes when zooming. I've added this to make it easier
-        // to get closer to an object you want to focus on.
-        let (pitch_sin, pitch_cos) = camera.pitch.0.sin_cos();
-        let scrollward =
-            Vector3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
-        camera.position += scrollward * self.scroll * self.speed * self.sensitivity * dt;
-        self.scroll = 0.0;
-
-        // Move up/down. Since we don't use roll, we can just
-        // modify the z coordinate directly.
         camera.position.z += (self.amount_up - self.amount_down) * self.speed * dt;
 
         // Rotate
