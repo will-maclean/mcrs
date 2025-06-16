@@ -463,7 +463,9 @@ impl State {
     }
 
     fn handle_mouse_button(&mut self, button: MouseButton, pressed: bool) {
-        if button == MouseButton::Left { self.mouse_pressed = pressed }
+        if button == MouseButton::Left {
+            self.mouse_pressed = pressed
+        }
     }
 
     fn handle_mouse_scroll(&mut self, delta: &MouseScrollDelta) {
