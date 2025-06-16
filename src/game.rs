@@ -14,6 +14,7 @@ pub struct MCRS<T: 'static> {
     last_update_time: instant::Instant,
     event_loop: EventLoop<T>,
     running: bool,
+    //Player doesn't do anything currently
     player: Player,
 }
 

@@ -7,8 +7,8 @@
     - [x] Block textures (different texture per side)
     - [x] Obj textures
     - [ ] Different textures on different sides of the one bloc
-- [ ] Coord/Camera cleanup
-    - [ ] Movement not aligned?
+- [x] Coord/Camera cleanup
+    - [x] Movement not aligned?
 - [ ] Chunks
     - [ ] Chunk Manager
         - [ ] Stores chunks
