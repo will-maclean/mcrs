@@ -1,6 +1,5 @@
 use crate::{texture, State};
 
-use wgpu::{Adapter, Device, Instance, PresentMode, Queue, Surface, SurfaceCapabilities};
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
@@ -8,6 +7,12 @@ use winit::window::{Window, WindowId};
 
 pub struct StateApplication {
     pub state: Option<State>,
+}
+
+impl Default for StateApplication {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StateApplication {
@@ -32,7 +37,7 @@ impl<T: 'static> ApplicationHandler<T> for StateApplication {
     ) {
         if let Some(state) = self.state.as_mut() {
             if state.window.id() == window_id {
-                let _ = state.input(&event);
+                state.input(&event);
                 match event {
                     WindowEvent::CloseRequested => {
                         event_loop.exit();
@@ -68,13 +73,10 @@ impl<T: 'static> ApplicationHandler<T> for StateApplication {
         event: winit::event::DeviceEvent,
     ) {
         if let Some(state) = self.state.as_mut() {
-            match event {
-                DeviceEvent::MouseMotion { delta: (dx, dy) } => {
-                    if state.mouse_pressed {
-                        state.camera_controller.process_mouse(dx, dy);
-                    }
+            if let DeviceEvent::MouseMotion { delta: (dx, dy) } = event {
+                if state.mouse_pressed {
+                    state.camera_controller.process_mouse(dx, dy);
                 }
-                _ => (),
             }
         }
     }

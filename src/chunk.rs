@@ -43,9 +43,7 @@ impl Chunk {
         self.blocks
             .iter()
             .flatten()
-            .into_iter()
             .flatten()
-            .into_iter()
             .flatten()
             .map(|c| {
                 let position = cgmath::Vector3 {
@@ -100,15 +98,13 @@ impl Chunk {
 
                 for k in solid_fill_height..solid_fill_height + 3 {
                     // now do some random scattering of blocks on the next row up
-                    if rand::random_ratio(4, 10) {
-                        if let Some(_) = chunk.blocks[k - 1][j][i] {
-                            chunk.blocks[k][j][i] = Some(Block {
-                                block_type,
-                                origin_x: i as i32,
-                                origin_y: j as i32,
-                                origin_z: k as i32,
-                            });
-                        }
+                    if rand::random_ratio(4, 10) && chunk.blocks[k - 1][j][i].is_some() {
+                        chunk.blocks[k][j][i] = Some(Block {
+                            block_type,
+                            origin_x: i as i32,
+                            origin_y: j as i32,
+                            origin_z: k as i32,
+                        });
                     }
                 }
             }
@@ -161,7 +157,7 @@ impl ChunkManager {
             Self::gen_chunk_origins_near_player(camera.position, self.config.render_dist as i32)
                 .into_iter()
                 .filter(|x| self.chunks.contains_key(x))
-                .filter(|x| in_camera_view(&camera, projection.fovy.0, self.chunks.get(x).unwrap()))
+                .filter(|x| in_camera_view(camera, projection.fovy.0, self.chunks.get(x).unwrap()))
                 .collect::<Vec<(i32, i32)>>();
     }
 

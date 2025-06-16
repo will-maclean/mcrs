@@ -300,7 +300,7 @@ impl State {
         instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
-                compatible_surface: Some(&surface),
+                compatible_surface: Some(surface),
                 force_fallback_adapter: false,
             })
             .block_on()
@@ -463,10 +463,7 @@ impl State {
     }
 
     fn handle_mouse_button(&mut self, button: MouseButton, pressed: bool) {
-        match button {
-            MouseButton::Left => self.mouse_pressed = pressed,
-            _ => {}
-        }
+        if button == MouseButton::Left { self.mouse_pressed = pressed }
     }
 
     fn handle_mouse_scroll(&mut self, delta: &MouseScrollDelta) {

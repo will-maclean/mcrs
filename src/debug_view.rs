@@ -28,7 +28,7 @@ impl DebugView {
         let swash_cache = SwashCache::new();
         let cache = Cache::new(device);
         let viewport = Viewport::new(device, &cache);
-        let mut atlas = TextAtlas::new(device, &queue, &cache, wgpu::TextureFormat::Bgra8UnormSrgb);
+        let mut atlas = TextAtlas::new(device, queue, &cache, wgpu::TextureFormat::Bgra8UnormSrgb);
         let text_renderer =
             TextRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
         let mut text_buffer = Buffer::new(&mut font_system, Metrics::new(30.0, 42.0));
@@ -89,7 +89,7 @@ impl DebugView {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("text_render_pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
+                view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,

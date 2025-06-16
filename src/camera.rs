@@ -90,6 +90,12 @@ pub struct CameraUniform {
     pub view_proj: [[f32; 4]; 4],
 }
 
+impl Default for CameraUniform {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CameraUniform {
     pub fn new() -> Self {
         use cgmath::SquareMatrix;
