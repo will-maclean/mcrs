@@ -10,13 +10,14 @@
 - [x] Coord/Camera cleanup
     - [x] Movement not aligned?
 - [ ] Chunks
-    - [ ] Chunk Manager
-        - [ ] Stores chunks
+    - [ ] Chunk Manager - WIP
+        - [x] Stores chunks
         - [ ] Trigger chunk gen
         - [ ] Controls when to render
     - [ ] Gen
         - [ ] Use noise in height maps
         - [ ] biomes
+        - [ ] Link to neighbouring chunks
 - [ ] Blocks
     - [ ] Add different block types
     - [ ] Add characteristics (how? struct attrs? component/trait type?)
@@ -29,3 +30,11 @@
     - [ ] Strip out of state -> into game::MCRS??
     - [x] Move out of lib
     - [x] Build a real game loop
+- Performance
+    - [ ] Instance Culling
+        - Now that we can gen new chunks, we can easily have 10k+ instances
+        in our render range. That means we need to start being performant
+        - Few different spots where we can cull:
+            - [ ] At a chunk level -> frustum culling
+            - At a block (instance) level -> frustum culling, backface culling, occlusion culling
+            3. More advanced (GPU-side) culls

@@ -1,9 +1,12 @@
-use crate::model;
-use cgmath::prelude::*;
+use std::collections::HashMap;
+
+use crate::{camera, model};
+use cgmath::{prelude::*, Point2, Vector2};
+use log::debug;
 
 const CHUNK_WIDTH: usize = 16;
 const CHUNK_HEIGHT: usize = 256;
-const BOTTOM_DEPTH: i32 = -128;
+const BOTTOM_DEPTH: i32 = -12;
 
 #[derive(Debug, Clone, Copy)]
 pub enum BlockType {
@@ -33,8 +36,6 @@ pub struct Chunk {
     origin_x: i32,
     origin_y: i32,
     blocks: [[[Option<Block>; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT],
-    //FIXME: render should be in the chunk mnager somewhere, not the chunk itself
-    render: bool,
 }
 
 impl Chunk {
@@ -71,13 +72,13 @@ impl Chunk {
     }
 
     pub fn gen_default_chunk(origin_x: i32, origin_y: i32) -> Self {
-        let solid_fill_height = 126;
+        debug!("Generating new chunk at ({origin_x}, {origin_y}");
+        let solid_fill_height = 10;
 
         let mut chunk = Chunk {
             origin_x,
             origin_y,
             blocks: [[[None; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT],
-            render: true,
         };
 
         for i in 0..CHUNK_WIDTH {
@@ -125,31 +126,126 @@ pub struct ChunkManagerConfig {
 impl Default for ChunkManagerConfig {
     fn default() -> Self {
         Self {
-            gen_dist: 4,
-            render_dist: 3,
+            gen_dist: 1,
+            render_dist: 1,
         }
     }
 }
 
 #[derive(Default)]
 pub struct ChunkManager {
-    //TODO: probably a more efficient type for this storage
-    pub chunks: Vec<Chunk>,
+    pub chunks: HashMap<(i32, i32), Chunk>,
+    render_keys: Vec<(i32, i32)>,
     pub config: ChunkManagerConfig,
 }
 
 impl ChunkManager {
-    pub fn update(&mut self, player_pos: cgmath::Point3<f32>) {}
+    pub fn update(&mut self, camera: &camera::Camera, projection: &camera::Projection) {
+        // First, check if we need to gen any new chunks
+        let new_gen_chunks =
+            Self::gen_chunk_origins_near_player(camera.position, self.config.gen_dist as i32)
+                .into_iter()
+                .filter(|x| !self.chunks.contains_key(x))
+                .collect::<Vec<_>>();
+
+        // Gen any new chunks
+        for (new_origin_x, new_origin_y) in new_gen_chunks {
+            self.chunks.insert(
+                (new_origin_x, new_origin_y),
+                Chunk::gen_default_chunk(new_origin_x, new_origin_y),
+            );
+        }
+
+        // now update the renderable chunks
+        self.render_keys =
+            Self::gen_chunk_origins_near_player(camera.position, self.config.render_dist as i32)
+                .into_iter()
+                .filter(|x| self.chunks.contains_key(x))
+                .filter(|x| in_camera_view(&camera, projection.fovy.0, self.chunks.get(x).unwrap()))
+                .collect::<Vec<(i32, i32)>>();
+    }
 
     pub fn gen_instances(&self) -> Vec<model::RenderInstance> {
         let mut instances = Vec::new();
 
-        for chunk in &self.chunks {
-            if chunk.render {
+        for k in &self.render_keys {
+            if let Some(chunk) = self.chunks.get(k) {
                 instances.append(&mut chunk.gen_instances());
             }
         }
 
         instances
     }
+
+    fn gen_chunk_origins_near_player(
+        player_pos: cgmath::Point3<f32>,
+        dist: i32,
+    ) -> Vec<(i32, i32)> {
+        // Draws a circle around the player, and returns all the chunk origins in this
+        // circle. This can be used to calculate which chunks should be rendered,
+        // or which new chunks should be generated.
+
+        let mut origins = Vec::new();
+
+        // First, gen all the candidates in the possible square
+        let min_x = player_pos.x as i32 - (CHUNK_WIDTH as i32 * dist);
+        let max_x = player_pos.x as i32 + (CHUNK_WIDTH as i32 * dist);
+        let start_x = Self::lowest_multiple_above(CHUNK_WIDTH as u32, min_x as u32) as i32;
+        let min_y = player_pos.y as i32 - (CHUNK_WIDTH as i32 * dist);
+        let max_y = player_pos.y as i32 + (CHUNK_WIDTH as i32 * dist);
+        let start_y = Self::lowest_multiple_above(CHUNK_WIDTH as u32, min_y as u32) as i32;
+
+        let check_dist = CHUNK_WIDTH as f32 * dist as f32;
+        let center_offset = CHUNK_WIDTH as f32 / 2.0;
+
+        for origin_x in (start_x..max_x).step_by(CHUNK_WIDTH) {
+            for origin_y in (start_y..max_y).step_by(CHUNK_WIDTH) {
+                // check for the distances
+                if Vector2::new(
+                    player_pos.x - origin_x as f32 + center_offset,
+                    player_pos.y - origin_y as f32 + center_offset,
+                )
+                .magnitude()
+                    < check_dist
+                {
+                    origins.push((origin_x, origin_y));
+                }
+            }
+        }
+
+        origins
+    }
+
+    fn lowest_multiple_above(x: u32, n: u32) -> u32 {
+        ((n / x) + 1) * x
+    }
+}
+
+fn in_camera_view(camera: &camera::Camera, fov: f32, chunk: &Chunk) -> bool {
+    let corners = vec![
+        Point2::new(chunk.origin_x, chunk.origin_y),
+        Point2::new(chunk.origin_x, chunk.origin_y + CHUNK_WIDTH as i32),
+        Point2::new(chunk.origin_x + CHUNK_WIDTH as i32, chunk.origin_y),
+        Point2::new(
+            chunk.origin_x + CHUNK_WIDTH as i32,
+            chunk.origin_y + CHUNK_WIDTH as i32,
+        ),
+    ];
+
+    let camera_pos = Point2::new(camera.position.x as i32, camera.position.y as i32);
+    let forward = Vector2::new(camera.yaw.cos(), camera.yaw.sin());
+
+    for c in corners {
+        // have to transform the vertex
+        let to_corner = (c - camera_pos).cast::<f32>().unwrap();
+        let dir = to_corner.normalize();
+        let angle_cos = forward.dot(dir);
+        let max_angle_cos = (fov / 2.0).cos();
+
+        if angle_cos >= max_angle_cos {
+            return true;
+        }
+    }
+
+    false
 }

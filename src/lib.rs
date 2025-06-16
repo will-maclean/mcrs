@@ -1,7 +1,7 @@
 use std::fs;
 use std::sync::Arc;
 
-use log::info;
+use log::{debug, info};
 use pollster::FutureExt;
 use texture::TextureManager;
 use wgpu::util::DeviceExt;
@@ -36,7 +36,7 @@ pub fn run() {
     game.run();
 }
 
-struct State {
+pub struct State {
     surface: Surface<'static>,
     device: Device,
     queue: Queue,
@@ -48,7 +48,6 @@ struct State {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     projection: camera::Projection,
-    instances: Vec<model::RenderInstance>,
     instance_buffer: wgpu::Buffer,
     depth_texture: texture::DepthTexture,
     mouse_pressed: bool,
@@ -59,16 +58,11 @@ struct State {
     texture_manager: texture::TextureManager,
     texture_bind_group: wgpu::BindGroup,
     pub running: bool,
+    n_instances: usize,
 }
 
 impl State {
     pub fn new(window: Window) -> Self {
-        let chunk = chunk::Chunk::gen_default_chunk(-8, -8);
-        let chunk_manager = chunk::ChunkManager {
-            chunks: vec![chunk],
-            config: Default::default(),
-        };
-
         let window_arc = Arc::new(window);
         let size = window_arc.inner_size();
         let instance = Self::create_gpu_instance();
@@ -99,8 +93,7 @@ impl State {
         let (texture_bind_group, texture_bind_group_layout) =
             texture_manager.create_and_submit_texture_array(&device, &queue);
 
-        // let depth_texture =
-        //     texture::Texture::create_depth_texture(&device, &config, "depth_texture");
+        let chunk_manager = chunk::ChunkManager::default();
 
         surface.configure(&device, &config);
 
@@ -171,16 +164,9 @@ impl State {
             cache: None,
         });
 
-        let instances = chunk_manager.gen_instances();
-
-        let instance_data = instances
-            .iter()
-            .map(|x| x.to_raw(&texture_manager))
-            .collect::<Vec<_>>();
-
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
+            contents: &[],
             usage: wgpu::BufferUsages::VERTEX,
         });
 
@@ -204,7 +190,6 @@ impl State {
             camera_buffer,
             camera_bind_group,
             camera_controller: camera::CameraController::new(1.0, 0.4),
-            instances,
             instance_buffer,
             projection,
             mouse_pressed: false,
@@ -213,6 +198,7 @@ impl State {
             texture_manager,
             texture_bind_group,
             running: true,
+            n_instances: 0,
         }
     }
 
@@ -379,16 +365,18 @@ impl State {
                 timestamp_writes: None,
             });
 
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            render_pass.set_pipeline(&self.render_pipeline);
+            if self.n_instances > 0 {
+                render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+                render_pass.set_pipeline(&self.render_pipeline);
 
-            for mesh in &self.obj_model.meshes {
-                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                render_pass
-                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
-                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-                render_pass.draw_indexed(0..mesh.n_elements, 0, 0..self.instances.len() as u32);
+                for mesh in &self.obj_model.meshes {
+                    render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                    render_pass
+                        .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
+                    render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+                    render_pass.draw_indexed(0..mesh.n_elements, 0, 0..self.n_instances as u32);
+                }
             }
         }
 
@@ -400,6 +388,27 @@ impl State {
         // self.window.request_redraw();
 
         Ok(())
+    }
+
+    fn update_instances(&mut self) -> usize {
+        let instances = self.chunk_manager.gen_instances();
+
+        debug!("{} instances to render", instances.len());
+
+        let instance_data = instances
+            .iter()
+            .map(|x| x.to_raw(&self.texture_manager))
+            .collect::<Vec<_>>();
+
+        self.instance_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Instance Buffer"),
+                contents: bytemuck::cast_slice(&instance_data),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+        instances.len()
     }
 
     pub fn window(&self) -> &Window {
@@ -440,7 +449,8 @@ impl State {
     }
 
     pub fn update(&mut self, dt: instant::Duration) {
-        self.chunk_manager.update(self.camera.position);
+        self.chunk_manager.update(&self.camera, &self.projection);
+        self.n_instances = self.update_instances();
         self.camera_controller.update_camera(&mut self.camera, dt);
         self.camera_uniform
             .update_view_proj(&self.camera, &self.projection);
