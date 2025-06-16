@@ -1,8 +1,12 @@
 use std::time::{Duration, Instant};
 
+use cgmath::{Point3, Rad};
 use winit::{event_loop::EventLoop, platform::pump_events::EventLoopExtPumpEvents};
 
-use crate::app;
+use crate::{
+    app,
+    player::{Entity, Player},
+};
 
 pub struct MCRS<T: 'static> {
     state_app: app::StateApplication,
@@ -10,6 +14,7 @@ pub struct MCRS<T: 'static> {
     last_update_time: instant::Instant,
     event_loop: EventLoop<T>,
     running: bool,
+    player: Player,
 }
 
 impl<T> MCRS<T> {
@@ -22,6 +27,7 @@ impl<T> MCRS<T> {
             last_render_time: Instant::now(),
             last_update_time: Instant::now(),
             running: true,
+            player: Player::new(Point3::new(0.0, 0.0, 0.0), Rad(0.0), Rad(0.0)),
         }
     }
 
@@ -57,6 +63,8 @@ impl<T> MCRS<T> {
         self.event_loop.pump_app_events(None, &mut self.state_app);
 
         if let Some(state) = self.state_app.state.as_ref() {
+            //TODO: how do we handle e.g. player events in here??
+            // Do we create some sort of buffer??
             return state.running;
         }
 
@@ -70,6 +78,7 @@ impl<T> MCRS<T> {
             self.last_update_time = now;
 
             state.update(dt);
+            self.player.update(dt);
 
             return state.running;
         }

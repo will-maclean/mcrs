@@ -17,11 +17,12 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
 
 pub mod app;
-mod camera;
+pub mod camera;
 mod chunk;
 mod debug_view;
 pub mod game;
 mod model;
+mod player;
 mod resources;
 mod texture;
 

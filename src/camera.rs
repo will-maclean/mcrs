@@ -1,6 +1,6 @@
 use cgmath::*;
 use std::{f32::consts::FRAC_PI_2, time::Duration};
-use winit::{dpi::PhysicalPosition, event::*, keyboard::KeyCode};
+use winit::{event::*, keyboard::KeyCode};
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
@@ -12,9 +12,9 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_co
 
 #[rustfmt::skip]
 pub const WGPU_TO_WORLD_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
-    cgmath::Vector4::new(0.0, 0.0, 1.0, 0.0),
+    cgmath::Vector4::new(-1.0, 0.0, 0.0, 0.0),
     cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
-    cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
+    cgmath::Vector4::new(0.0, 0.0, 1.0, 0.0),
     cgmath::Vector4::new(0.0, 0.0, 0.0, 1.0),
 );
 
@@ -54,7 +54,7 @@ impl Camera {
         let (sin_pitch, cos_pitch) = self.pitch.0.sin_cos();
         let (sin_yaw, cos_yaw) = self.yaw.0.sin_cos();
 
-        Vector3::new(cos_pitch * sin_yaw, cos_pitch * cos_yaw, sin_pitch).normalize()
+        Vector3::new(cos_pitch * cos_yaw, cos_pitch * sin_yaw, sin_pitch).normalize()
     }
 }
 
@@ -114,7 +114,6 @@ pub struct CameraController {
     amount_backward: f32,
     rotate_horizontal: f32,
     rotate_vertical: f32,
-    scroll: f32,
     sensitivity: f32,
     speed: f32,
     pub forward: Vector3<f32>,
@@ -134,7 +133,6 @@ impl CameraController {
             amount_backward: 0.0,
             rotate_horizontal: 0.0,
             rotate_vertical: 0.0,
-            scroll: 0.0,
             forward: Vector3::zero(),
             right: Vector3::zero(),
         }
@@ -183,7 +181,7 @@ impl CameraController {
         // Move forward/backward and left/right
         let (yaw_sin, yaw_cos) = camera.yaw.sin_cos();
         self.forward = Vector3::new(yaw_cos, yaw_sin, 0.0).normalize();
-        self.right = Vector3::new(yaw_sin, yaw_cos, 0.0).normalize();
+        self.right = Vector3::new(-yaw_sin, yaw_cos, 0.0).normalize();
         camera.position +=
             self.forward * (self.amount_forward - self.amount_backward) * self.speed * dt;
         camera.position += self.right * (self.amount_right - self.amount_left) * self.speed * dt;
@@ -191,7 +189,7 @@ impl CameraController {
 
         // Rotate
         camera.yaw += Rad(self.rotate_horizontal) * self.sensitivity * dt;
-        camera.pitch += Rad(-self.rotate_vertical) * self.sensitivity * dt;
+        camera.pitch += Rad(self.rotate_vertical) * self.sensitivity * dt;
 
         // If process_mouse isn't called every frame, these values
         // will not get set to zero, and the camera will rotate
