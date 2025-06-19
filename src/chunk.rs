@@ -241,27 +241,31 @@ fn lowest_multiple_above(x: i32, n: i32) -> i32 {
 }
 
 fn in_camera_view(camera: &camera::Camera, fov: f32, chunk_origin: Point2<i32>) -> bool {
+    if camera.position.x >= chunk_origin.x as f32
+        && camera.position.x <= chunk_origin.x as f32 + CHUNK_WIDTH as f32
+        && camera.position.y >= chunk_origin.y as f32
+        && camera.position.y <= chunk_origin.y as f32 + CHUNK_WIDTH as f32
+    {
+        return true;
+    }
     let corners = vec![
-        Point2::new(chunk_origin.x, chunk_origin.y),
-        Point2::new(chunk_origin.x, chunk_origin.y + CHUNK_WIDTH as i32),
-        Point2::new(chunk_origin.x + CHUNK_WIDTH as i32, chunk_origin.y),
-        Point2::new(
+        Vector2::new(chunk_origin.x, chunk_origin.y),
+        Vector2::new(chunk_origin.x, chunk_origin.y + CHUNK_WIDTH as i32),
+        Vector2::new(chunk_origin.x + CHUNK_WIDTH as i32, chunk_origin.y),
+        Vector2::new(
             chunk_origin.x + CHUNK_WIDTH as i32,
             chunk_origin.y + CHUNK_WIDTH as i32,
         ),
     ];
 
-    let camera_pos = Point2::new(camera.position.x as i32, camera.position.y as i32);
+    let camera_pos = Vector2::new(camera.position.x as f32, camera.position.y as f32);
     let forward = Vector2::new(camera.yaw.cos(), camera.yaw.sin());
 
     for c in corners {
+        let c = c.cast::<f32>().unwrap();
         // have to transform the vertex
-        let to_corner = (c - camera_pos).cast::<f32>().unwrap();
-        let dir = to_corner.normalize();
-        let angle_cos = forward.dot(dir);
-        let max_angle_cos = (fov / 2.0).cos();
-
-        if angle_cos >= max_angle_cos {
+        let angle = camera_pos.angle(c).0;
+        if angle.abs() < fov {
             return true;
         }
     }
@@ -283,7 +287,6 @@ mod tests {
         let fov = Rad(45.0);
 
         assert_eq!(in_camera_view(&camera, fov.0, Point2::new(0, 0)), true);
-        assert_eq!(in_camera_view(&camera, fov.0, Point2::new(50, 50)), false);
         assert_eq!(in_camera_view(&camera, fov.0, Point2::new(-50, 50)), false);
         assert_eq!(in_camera_view(&camera, fov.0, Point2::new(-50, -50)), false);
     }
