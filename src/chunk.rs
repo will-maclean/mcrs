@@ -156,7 +156,7 @@ impl ChunkManager {
                 .filter(|x| {
                     in_camera_view(
                         camera,
-                        projection.fovy.0,
+                        projection.fovy,
                         self.chunks.get(x).unwrap().origin,
                     )
                 })
@@ -197,15 +197,6 @@ fn gen_chunk_origins_near_player(
     let check_dist = CHUNK_WIDTH as f32 * dist as f32;
     let center_offset = CHUNK_WIDTH as f32 / 2.0;
 
-    dbg!(min_x);
-    dbg!(max_x);
-    dbg!(start_x);
-    dbg!(min_y);
-    dbg!(max_y);
-    dbg!(start_y);
-    dbg!(check_dist);
-    dbg!(center_offset);
-
     for origin_x in (start_x..max_x).step_by(CHUNK_WIDTH) {
         for origin_y in (start_y..max_y).step_by(CHUNK_WIDTH) {
             // check for the distances
@@ -240,7 +231,7 @@ fn lowest_multiple_above(x: i32, n: i32) -> i32 {
     }
 }
 
-fn in_camera_view(camera: &camera::Camera, fov: f32, chunk_origin: Point2<i32>) -> bool {
+fn in_camera_view(camera: &camera::Camera, fov: cgmath::Rad<f32>, chunk_origin: Point2<i32>) -> bool {
     if camera.position.x >= chunk_origin.x as f32
         && camera.position.x <= chunk_origin.x as f32 + CHUNK_WIDTH as f32
         && camera.position.y >= chunk_origin.y as f32
@@ -263,9 +254,10 @@ fn in_camera_view(camera: &camera::Camera, fov: f32, chunk_origin: Point2<i32>) 
 
     for c in corners {
         let c = c.cast::<f32>().unwrap();
+        let view = c - camera_pos;
+        let angle = view.angle(forward);
         // have to transform the vertex
-        let angle = camera_pos.angle(c).0;
-        if angle.abs() < fov {
+        if angle.0.abs() < fov.0 {
             return true;
         }
     }
@@ -275,7 +267,7 @@ fn in_camera_view(camera: &camera::Camera, fov: f32, chunk_origin: Point2<i32>) 
 
 #[cfg(test)]
 mod tests {
-    use cgmath::{Point3, Rad};
+    use cgmath::{Deg, Point3, Rad};
 
     use crate::camera::Camera;
 
@@ -284,11 +276,11 @@ mod tests {
     #[test]
     fn test_in_camera_view() {
         let camera = Camera::new([0.0, 0.0, 0.0], Rad(0.0), Rad(0.0));
-        let fov = Rad(45.0);
+        let fov = Deg(45.0);
 
-        assert_eq!(in_camera_view(&camera, fov.0, Point2::new(0, 0)), true);
-        assert_eq!(in_camera_view(&camera, fov.0, Point2::new(-50, 50)), false);
-        assert_eq!(in_camera_view(&camera, fov.0, Point2::new(-50, -50)), false);
+        assert_eq!(in_camera_view(&camera, fov.into(), Point2::new(0, 0)), true);
+        assert_eq!(in_camera_view(&camera, fov.into(), Point2::new(-50, 50)), false);
+        assert_eq!(in_camera_view(&camera, fov.into(), Point2::new(-50, -50)), false);
     }
 
     #[test]
