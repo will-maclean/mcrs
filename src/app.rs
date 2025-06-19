@@ -57,9 +57,7 @@ impl<T: 'static> ApplicationHandler<T> for StateApplication {
                         button,
                     } => state.handle_mouse_button(button, btn_state.is_pressed()),
                     WindowEvent::MouseWheel { delta, .. } => state.handle_mouse_scroll(&delta),
-                    WindowEvent::RedrawRequested => {
-                        log::debug!("Redraw request event being handled")
-                    }
+                    WindowEvent::RedrawRequested => {}
                     _ => {}
                 }
             }

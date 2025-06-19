@@ -11,16 +11,23 @@ const BOTTOM_DEPTH: i32 = -12;
 #[derive(Debug, Clone, Copy)]
 pub enum BlockType {
     Dirt,
-    Weird,
+    Stone,
 }
 
 impl BlockType {
     fn tex_label(&self) -> &'static str {
         match self {
-            Self::Dirt => "stone",
-            Self::Weird => "weird",
+            Self::Dirt => "dirt",
+            Self::Stone => "stone",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum BlockExposure {
+    Internal,
+    External,
+    ChunkBorder,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -29,6 +36,20 @@ struct Block {
     origin_y: i32,
     origin_z: i32,
     block_type: BlockType,
+
+    exposure: BlockExposure,
+}
+
+impl Block {
+    fn visible(&self) -> bool {
+        //TODO: this is extremely basic, but might
+        //be good enough to keep us going for a while
+        match self.exposure {
+            BlockExposure::ChunkBorder => false,
+            BlockExposure::Internal => false,
+            BlockExposure::External => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -44,6 +65,7 @@ impl Chunk {
             .flatten()
             .flatten()
             .flatten()
+            .filter(|b| b.visible())
             .map(|c| {
                 let position = cgmath::Vector3 {
                     x: self.origin.x as f32 + c.origin_x as f32,
@@ -79,18 +101,26 @@ impl Chunk {
 
         for i in 0..CHUNK_WIDTH {
             for j in 0..CHUNK_WIDTH {
-                let block_type = if (i + j) % 2 == 0 {
-                    BlockType::Dirt
-                } else {
-                    BlockType::Weird
-                };
-
                 for k in 0..solid_fill_height {
+                    let block_type = if k == solid_fill_height - 1 {
+                        BlockType::Stone
+                    } else {
+                        BlockType::Stone
+                    };
+
+                    let exposure = if k == solid_fill_height - 1 {
+                        BlockExposure::External
+                    } else if i == 0 || i == CHUNK_WIDTH - 1 || j == 0 || j == CHUNK_WIDTH - 1 {
+                        BlockExposure::ChunkBorder
+                    } else {
+                        BlockExposure::Internal
+                    };
                     chunk.blocks[k][j][i] = Some(Block {
-                        block_type,
                         origin_x: i as i32,
                         origin_y: j as i32,
                         origin_z: k as i32,
+                        block_type,
+                        exposure,
                     });
                 }
 
@@ -98,10 +128,11 @@ impl Chunk {
                     // now do some random scattering of blocks on the next row up
                     if rand::random_ratio(4, 10) && chunk.blocks[k - 1][j][i].is_some() {
                         chunk.blocks[k][j][i] = Some(Block {
-                            block_type,
                             origin_x: i as i32,
                             origin_y: j as i32,
                             origin_z: k as i32,
+                            block_type: BlockType::Dirt,
+                            exposure: BlockExposure::External,
                         });
                     }
                 }
@@ -109,6 +140,11 @@ impl Chunk {
         }
 
         chunk
+    }
+
+    fn update_exposure(&mut self) {
+        //NOTE: should only be called when required, not every tick (if can be avoided)
+        todo!()
     }
 }
 
@@ -120,8 +156,8 @@ pub struct ChunkManagerConfig {
 impl Default for ChunkManagerConfig {
     fn default() -> Self {
         Self {
-            gen_dist: 1,
-            render_dist: 1,
+            gen_dist: 2,
+            render_dist: 2,
         }
     }
 }
@@ -154,11 +190,7 @@ impl ChunkManager {
                 .into_iter()
                 .filter(|x| self.chunks.contains_key(x))
                 .filter(|x| {
-                    in_camera_view(
-                        camera,
-                        projection.fovy,
-                        self.chunks.get(x).unwrap().origin,
-                    )
+                    in_camera_view(camera, projection.fovy, self.chunks.get(x).unwrap().origin)
                 })
                 .collect();
     }
@@ -171,6 +203,12 @@ impl ChunkManager {
                 instances.append(&mut chunk.gen_instances());
             }
         }
+
+        debug!(
+            "ChunkManager submitting {} chunks, with {} total instances to render",
+            self.render_keys.len(),
+            instances.len()
+        );
 
         instances
     }
@@ -231,7 +269,11 @@ fn lowest_multiple_above(x: i32, n: i32) -> i32 {
     }
 }
 
-fn in_camera_view(camera: &camera::Camera, fov: cgmath::Rad<f32>, chunk_origin: Point2<i32>) -> bool {
+fn in_camera_view(
+    camera: &camera::Camera,
+    fov: cgmath::Rad<f32>,
+    chunk_origin: Point2<i32>,
+) -> bool {
     if camera.position.x >= chunk_origin.x as f32
         && camera.position.x <= chunk_origin.x as f32 + CHUNK_WIDTH as f32
         && camera.position.y >= chunk_origin.y as f32
@@ -279,8 +321,14 @@ mod tests {
         let fov = Deg(45.0);
 
         assert_eq!(in_camera_view(&camera, fov.into(), Point2::new(0, 0)), true);
-        assert_eq!(in_camera_view(&camera, fov.into(), Point2::new(-50, 50)), false);
-        assert_eq!(in_camera_view(&camera, fov.into(), Point2::new(-50, -50)), false);
+        assert_eq!(
+            in_camera_view(&camera, fov.into(), Point2::new(-50, 50)),
+            false
+        );
+        assert_eq!(
+            in_camera_view(&camera, fov.into(), Point2::new(-50, -50)),
+            false
+        );
     }
 
     #[test]

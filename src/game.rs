@@ -48,9 +48,14 @@ impl<T> MCRS<T> {
 
             self.running &= self.input();
 
+            // modification: make sure we get at least one tick in
+            // per render. Ideally this isn't something we run into
+            // a lot, but with very heavy rendering scenarios we want
+            // at least one tick per render no matter what
+            self.running &= self.update();
+
             while accum_time >= update_timestep {
                 self.running &= self.update();
-
                 accum_time -= update_timestep;
             }
 

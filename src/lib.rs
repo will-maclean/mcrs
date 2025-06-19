@@ -1,6 +1,7 @@
 use std::fs;
 use std::sync::Arc;
 
+use image::imageops;
 use log::{debug, info};
 use pollster::FutureExt;
 use texture::TextureManager;
@@ -77,15 +78,19 @@ impl State {
             "stone",
             texture::Texture::from_image(
                 "stone",
-                &image::load_from_memory(&fs::read("res/cube-diffuse.jpg").unwrap()).unwrap(),
+                &image::load_from_memory(&fs::read("res/cobble.png").unwrap())
+                    .unwrap()
+                    .resize(256, 256, imageops::FilterType::Nearest),
             ),
         );
 
         texture_manager_builder.add_texture(
-            "weird",
+            "dirt",
             texture::Texture::from_image(
-                "weird",
-                &image::load_from_memory(&fs::read("res/cube-normal.png").unwrap()).unwrap(),
+                "dirt",
+                &image::load_from_memory(&fs::read("res/dirt.png").unwrap())
+                    .unwrap()
+                    .resize(256, 256, imageops::FilterType::Nearest),
             ),
         );
 
@@ -425,6 +430,15 @@ impl State {
                     },
                 ..
             } => self.running = false,
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(KeyCode::F1),
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => self.debug_view.view_active = !self.debug_view.view_active,
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {

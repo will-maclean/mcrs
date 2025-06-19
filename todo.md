@@ -10,10 +10,11 @@
 - [x] Coord/Camera cleanup
     - [x] Movement not aligned?
 - [ ] Chunks
-    - [ ] Chunk Manager - WIP
+    - [ ] Chunk Manager
         - [x] Stores chunks
-        - [ ] Trigger chunk gen
-        - [ ] Controls when to render
+        - [x] Trigger chunk gen
+        - [x] Controls when to render
+        - [ ] Update block visibility
     - [ ] Gen
         - [ ] Use noise in height maps
         - [ ] biomes
@@ -35,6 +36,14 @@
         - Now that we can gen new chunks, we can easily have 10k+ instances
         in our render range. That means we need to start being performant
         - Few different spots where we can cull:
-            - [ ] At a chunk level -> frustum culling
+            - [x] At a chunk level -> frustum culling
             - At a block (instance) level -> frustum culling, backface culling, occlusion culling
             3. More advanced (GPU-side) culls
+        - Can any of this be vectorised??
+- Gameplay
+    - [ ] Place/break blocks
+    - [ ] HUD
+    - [ ] Inventory
+    - [ ] Player instead of camera
+        - [ ] Gravity
+        - [ ] Collision detection
