@@ -24,6 +24,7 @@ mod debug_view;
 pub mod game;
 mod model;
 mod player;
+mod raycasting;
 mod resources;
 mod texture;
 

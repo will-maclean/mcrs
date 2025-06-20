@@ -1,7 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{camera, model};
-use cgmath::{prelude::*, Point2, Vector2};
+use crate::{
+    camera, model,
+    raycasting::{Ray, RayResult},
+};
+use cgmath::{prelude::*, Point2, Point3, Vector2};
 use log::debug;
 
 const CHUNK_WIDTH: usize = 16;
@@ -31,7 +34,7 @@ enum BlockExposure {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Block {
+pub struct Block {
     origin_x: i32,
     origin_y: i32,
     origin_z: i32,
@@ -146,6 +149,31 @@ impl Chunk {
         //NOTE: should only be called when required, not every tick (if can be avoided)
         todo!()
     }
+
+    pub fn cast_ray(&self, ray: Ray) -> Option<Block> {
+        None
+    }
+
+    pub fn mutate_block<F>(&mut self, block_loc: Point3<i32>, f: F)
+    where
+        F: FnOnce(&mut Block),
+    {
+        if let Ok(local_pos) = self.world_to_local(block_loc) {
+            let mut block = self.blocks[local_pos.x][local_pos.y][local_pos.z].unwrap();
+            f(&mut block)
+        }
+    }
+
+    fn world_to_local(&self, pos: Point3<i32>) -> Result<Point3<usize>, ()> {
+        let point = Point3::new(pos.x - self.origin.x, pos.y - self.origin.y, pos.z);
+        let point = point.cast::<usize>().unwrap();
+
+        if point.x < 0 || point.x >= CHUNK_WIDTH || point.y < 0 || point.y >= CHUNK_WIDTH {
+            Err(())
+        } else {
+            Ok(point)
+        }
+    }
 }
 
 pub struct ChunkManagerConfig {
@@ -211,6 +239,29 @@ impl ChunkManager {
         );
 
         instances
+    }
+
+    pub fn cast_ray(&self, ray: Ray) -> RayResult {
+        RayResult::None
+    }
+
+    pub fn mutate_block<F>(&mut self, block_loc: Point3<i32>, f: F)
+    where
+        F: FnOnce(&mut Block),
+    {
+        //TODO: smarter return codes?
+
+        let chunk_loc = block_to_chunk(block_loc);
+        if let Some(chunk) = self.chunks.get_mut(&chunk_loc) {
+            chunk.mutate_block(block_loc, f)
+        }
+    }
+}
+
+fn block_to_chunk(block_pos: Point3<i32>) -> Point2<i32> {
+    Point2 {
+        x: block_pos.x / CHUNK_WIDTH as i32,
+        y: block_pos.y / CHUNK_WIDTH as i32,
     }
 }
 
