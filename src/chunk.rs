@@ -174,6 +174,30 @@ impl Chunk {
             Ok(point)
         }
     }
+    pub fn set_block(&mut self, loc: Point3<i32>, block: Block) -> Result<(), ()> {
+        if let Ok(local_pos) = self.world_to_local(loc) {
+            // Can only place in an empty location
+            if let Some(_) = self.blocks[local_pos.x][local_pos.y][local_pos.z] {
+                Err(())
+            } else {
+                self.blocks[local_pos.x][local_pos.y][local_pos.z] = Some(block);
+                Ok(())
+            }
+        } else {
+            Err(())
+        }
+    }
+
+    pub fn remove_block(&mut self, loc: Point3<i32>) -> Result<Block, ()> {
+        if let Ok(local_pos) = self.world_to_local(loc) {
+            // Can only place in an empty location
+            if let Some(block) = self.blocks[local_pos.x][local_pos.y][local_pos.z] {
+                self.blocks[local_pos.x][local_pos.y][local_pos.z] = None;
+                return Ok(block);
+            }
+        }
+        Err(())
+    }
 }
 
 pub struct ChunkManagerConfig {
@@ -254,6 +278,24 @@ impl ChunkManager {
         let chunk_loc = block_to_chunk(block_loc);
         if let Some(chunk) = self.chunks.get_mut(&chunk_loc) {
             chunk.mutate_block(block_loc, f)
+        }
+    }
+
+    pub fn set_block(&mut self, loc: Point3<i32>, block: Block) -> Result<(), ()> {
+        let chunk_loc = block_to_chunk(loc);
+        if let Some(chunk) = self.chunks.get_mut(&chunk_loc) {
+            chunk.set_block(loc, block)
+        } else {
+            Err(())
+        }
+    }
+
+    pub fn remove_block(&mut self, loc: Point3<i32>) -> Result<Block, ()> {
+        let chunk_loc = block_to_chunk(loc);
+        if let Some(chunk) = self.chunks.get_mut(&chunk_loc) {
+            chunk.remove_block(loc)
+        } else {
+            Err(())
         }
     }
 }

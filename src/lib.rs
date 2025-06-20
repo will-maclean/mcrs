@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use image::imageops;
 use log::{debug, info};
+use player::player_left_click;
 use pollster::FutureExt;
 use texture::TextureManager;
 use wgpu::util::DeviceExt;
@@ -479,7 +480,8 @@ impl State {
 
     fn handle_mouse_button(&mut self, button: MouseButton, pressed: bool) {
         if button == MouseButton::Left {
-            self.mouse_pressed = pressed
+            self.mouse_pressed = pressed;
+            player_left_click(&self.camera, &mut self.chunk_manager);
         }
     }
 
