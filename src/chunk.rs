@@ -540,5 +540,11 @@ mod tests {
         } else {
             assert!(false);
         }
+
+        // now insert a block that camera ray SHOULDN'T hit
+        let _ = chunk.remove_block(block_pos);
+        let block_pos = Point3::new(1, 2, 1);
+        let _ = chunk.set_block(block_pos, block);
+        assert_eq!(chunk.cast_ray(Ray::from(&camera)), RayResult::None);
     }
 }
