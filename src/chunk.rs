@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     camera, model,
-    raycasting::{Ray, RayResult},
+    raycasting::{BlockFace, Ray, RayResult},
 };
 use cgmath::{prelude::*, Point2, Point3, Vector2};
 use log::debug;
@@ -150,8 +150,26 @@ impl Chunk {
         todo!()
     }
 
-    pub fn cast_ray(&self, ray: Ray) -> Option<Block> {
-        None
+    pub fn cast_ray(&self, ray: Ray) -> RayResult {
+        let iter_dist = ray.max_dist / ray.n_tests as f32;
+        for i in 0..ray.n_tests {
+            let test_pos_f32 = ray.pos + (iter_dist * i as f32 * ray.dir);
+            //TODO: Check that cast works correctly
+            let test_pos = test_pos_f32.cast::<i32>().unwrap();
+            if let Ok(test_pos_block) = self.world_to_local(test_pos) {
+                if let Some(block) =
+                    self.blocks[test_pos_block.x][test_pos_block.y][test_pos_block.z]
+                {
+                    return RayResult::Block {
+                        loc: test_pos,
+                        //TODO: figure out how to do the face detection
+                        face: BlockFace::ZPos,
+                        dist: test_pos_f32.to_vec().magnitude(),
+                    };
+                }
+            }
+        }
+        RayResult::None
     }
 
     pub fn mutate_block<F>(&mut self, block_loc: Point3<i32>, f: F)

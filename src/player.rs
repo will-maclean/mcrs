@@ -63,7 +63,7 @@ pub fn player_left_click(camera: &Camera, chunk_manager: &mut ChunkManager) {
     let ray_res = chunk_manager.cast_ray(ray);
 
     match ray_res {
-        RayResult::Block { loc, face } => {
+        RayResult::Block { loc, face, dist } => {
             // break block
             let _ = chunk_manager.remove_block(loc);
         }
