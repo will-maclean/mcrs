@@ -195,11 +195,17 @@ impl Chunk {
     }
 
     fn world_to_local(&self, pos: Point3<i32>) -> Result<Point3<usize>, ()> {
-        let point = Point3::new(pos.x - self.origin.x, pos.y - self.origin.y, pos.z);
+        let point = Point3::new(
+            pos.x - self.origin.x,
+            pos.y - self.origin.y,
+            pos.z - BOTTOM_DEPTH,
+        );
         if point.x < 0
             || point.x >= CHUNK_WIDTH as i32
             || point.y < 0
             || point.y >= CHUNK_WIDTH as i32
+            || point.z < 0
+            || point.z >= CHUNK_HEIGHT as i32
         {
             Err(())
         } else {
