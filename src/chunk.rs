@@ -35,15 +35,18 @@ enum BlockExposure {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Block {
-    origin_x: i32,
-    origin_y: i32,
-    origin_z: i32,
     block_type: BlockType,
-
     exposure: BlockExposure,
 }
 
 impl Block {
+    pub fn new(block_type: BlockType) -> Self {
+        Self {
+            block_type,
+            //FIXME: implement
+            exposure: BlockExposure::External,
+        }
+    }
     fn visible(&self) -> bool {
         //TODO: this is extremely basic, but might
         //be good enough to keep us going for a while
@@ -62,35 +65,46 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    fn idx_to_world(&self, x: usize, y: usize, z: usize) -> Point3<i32> {
+        Point3::new(
+            x as i32 + self.origin.x,
+            y as i32 + self.origin.y,
+            BOTTOM_DEPTH + z as i32,
+        )
+    }
+
     pub fn gen_instances(&self) -> Vec<model::RenderInstance> {
-        self.blocks
-            .iter()
-            .flatten()
-            .flatten()
-            .flatten()
-            .filter(|b| b.visible())
-            .map(|c| {
-                let position = cgmath::Vector3 {
-                    x: self.origin.x as f32 + c.origin_x as f32,
-                    y: self.origin.y as f32 + c.origin_y as f32,
-                    z: BOTTOM_DEPTH as f32 + c.origin_z as f32,
-                };
+        //FIXME: Surely this can be done nice with some sort of mapping
+        let mut result = Vec::new();
 
-                let rotation = cgmath::Quaternion::from_axis_angle(
-                    cgmath::Vector3::unit_z(),
-                    cgmath::Deg(0.0),
-                );
-                let scale = 0.5;
+        for x in 0..CHUNK_WIDTH {
+            for y in 0..CHUNK_WIDTH {
+                for z in 0..CHUNK_HEIGHT {
+                    if let Some(block) = self.blocks[z][y][x] {
+                        if block.visible() {
+                            let position =
+                                self.idx_to_world(x, y, z).cast::<f32>().unwrap().to_vec();
 
-                model::RenderInstance {
-                    position,
-                    rotation,
-                    scale,
-                    //TODO: faster if we can use the static strings everywhere
-                    label: c.block_type.tex_label().to_string(),
+                            let rotation = cgmath::Quaternion::from_axis_angle(
+                                cgmath::Vector3::unit_z(),
+                                cgmath::Deg(0.0),
+                            );
+                            let scale = 0.5;
+
+                            result.push(model::RenderInstance {
+                                position,
+                                rotation,
+                                scale,
+                                //TODO: faster if we can use the static strings everywhere
+                                label: block.block_type.tex_label().to_string(),
+                            });
+                        }
+                    }
                 }
-            })
-            .collect::<Vec<_>>()
+            }
+        }
+
+        result
     }
 
     pub fn gen_default_chunk(origin: Point2<i32>) -> Self {
@@ -119,9 +133,6 @@ impl Chunk {
                         BlockExposure::Internal
                     };
                     chunk.blocks[k][j][i] = Some(Block {
-                        origin_x: i as i32,
-                        origin_y: j as i32,
-                        origin_z: k as i32,
                         block_type,
                         exposure,
                     });
@@ -131,9 +142,6 @@ impl Chunk {
                     // now do some random scattering of blocks on the next row up
                     if rand::random_ratio(4, 10) && chunk.blocks[k - 1][j][i].is_some() {
                         chunk.blocks[k][j][i] = Some(Block {
-                            origin_x: i as i32,
-                            origin_y: j as i32,
-                            origin_z: k as i32,
                             block_type: BlockType::Dirt,
                             exposure: BlockExposure::External,
                         });
@@ -160,12 +168,16 @@ impl Chunk {
                 if let Some(block) =
                     self.blocks[test_pos_block.x][test_pos_block.y][test_pos_block.z]
                 {
-                    return RayResult::Block {
+                    let result = RayResult::Block {
                         loc: test_pos,
                         //TODO: figure out how to do the face detection
                         face: BlockFace::ZPos,
                         dist: test_pos_f32.to_vec().magnitude(),
                     };
+
+                    debug!("{:?}", result);
+
+                    return result;
                 }
             }
         }
@@ -184,12 +196,14 @@ impl Chunk {
 
     fn world_to_local(&self, pos: Point3<i32>) -> Result<Point3<usize>, ()> {
         let point = Point3::new(pos.x - self.origin.x, pos.y - self.origin.y, pos.z);
-        let point = point.cast::<usize>().unwrap();
-
-        if point.x < 0 || point.x >= CHUNK_WIDTH || point.y < 0 || point.y >= CHUNK_WIDTH {
+        if point.x < 0
+            || point.x >= CHUNK_WIDTH as i32
+            || point.y < 0
+            || point.y >= CHUNK_WIDTH as i32
+        {
             Err(())
         } else {
-            Ok(point)
+            Ok(point.cast::<usize>().unwrap())
         }
     }
     pub fn set_block(&mut self, loc: Point3<i32>, block: Block) -> Result<(), ()> {
@@ -274,17 +288,20 @@ impl ChunkManager {
             }
         }
 
-        debug!(
-            "ChunkManager submitting {} chunks, with {} total instances to render",
-            self.render_keys.len(),
-            instances.len()
-        );
-
         instances
     }
 
     pub fn cast_ray(&self, ray: Ray) -> RayResult {
-        RayResult::None
+        //TODO: for now, this will only allow the play to
+        //cast rays inside their own chunk. What we really need
+        //is to do a ray cast at a chunk level, then iterate throut
+        //the results, closest to furthest, looking for a collision
+        let chunk_loc = block_to_chunk(ray.pos.cast::<i32>().unwrap());
+        if let Some(chunk) = self.chunks.get(&chunk_loc) {
+            chunk.cast_ray(ray)
+        } else {
+            RayResult::None
+        }
     }
 
     pub fn mutate_block<F>(&mut self, block_loc: Point3<i32>, f: F)

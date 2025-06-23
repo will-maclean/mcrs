@@ -44,6 +44,7 @@
             - At a block (instance) level -> frustum culling, backface culling, occlusion culling
             3. More advanced (GPU-side) culls
         - Can any of this be vectorised??
+    - Could do something fancy like moving expensive, rare operations like chunk gen to a different core??
 - Gameplay
     - [ ] Place/break blocks
         - [ ] raycasting

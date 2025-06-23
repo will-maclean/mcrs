@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use image::imageops;
 use log::{debug, info};
-use player::player_left_click;
+use player::{player_left_click, player_right_click};
 use pollster::FutureExt;
 use texture::TextureManager;
 use wgpu::util::DeviceExt;
@@ -399,9 +399,6 @@ impl State {
 
     fn update_instances(&mut self) -> usize {
         let instances = self.chunk_manager.gen_instances();
-
-        debug!("{} instances to render", instances.len());
-
         let instance_data = instances
             .iter()
             .map(|x| x.to_raw(&self.texture_manager))
@@ -451,14 +448,10 @@ impl State {
                 ..
             } => self.camera_controller.process_keyboard(*key, *state),
             WindowEvent::MouseWheel { delta, .. } => {
-                self.camera_controller.process_scroll(delta);
+                self.handle_mouse_scroll(delta);
             }
-            WindowEvent::MouseInput {
-                button: MouseButton::Left,
-                state,
-                ..
-            } => {
-                self.mouse_pressed = *state == ElementState::Pressed;
+            WindowEvent::MouseInput { button, state, .. } => {
+                self.handle_mouse_button(*button, *state);
             }
             _ => (),
         }
@@ -478,10 +471,13 @@ impl State {
         );
     }
 
-    fn handle_mouse_button(&mut self, button: MouseButton, pressed: bool) {
+    fn handle_mouse_button(&mut self, button: MouseButton, state: ElementState) {
         if button == MouseButton::Left {
-            self.mouse_pressed = pressed;
+            debug!("Mouse button press");
+            self.mouse_pressed = state == ElementState::Pressed;
             player_left_click(&self.camera, &mut self.chunk_manager);
+        } else if button == MouseButton::Right {
+            player_right_click(&self.camera, &mut self.chunk_manager);
         }
     }
 
