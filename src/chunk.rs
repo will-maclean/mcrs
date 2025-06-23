@@ -107,6 +107,15 @@ impl Chunk {
         result
     }
 
+    pub fn gen_empty_chunk(origin: Point2<i32>) -> Self {
+        // Probably only going to be used for testing but
+        // whatever
+        Self {
+            origin,
+            blocks: [[[None; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT],
+        }
+    }
+
     pub fn gen_default_chunk(origin: Point2<i32>) -> Self {
         debug!("Generating new chunk at ({:?}", origin);
         let solid_fill_height = 10;
@@ -509,6 +518,27 @@ mod tests {
 
         for (player_pos, dist, res) in cases {
             assert_eq!(gen_chunk_origins_near_player(player_pos, dist), res);
+        }
+    }
+
+    #[test]
+    fn test_chunk_raycasting() {
+        let camera = Camera::new(Point3::new(1.0, 1.0, 1.0), Rad(0.0), Rad(0.0));
+        let chunk_origin = Point2::new(0, 0);
+        let mut chunk = Chunk::gen_empty_chunk(chunk_origin);
+
+        // now, the chunk is empty, so casting a ray now
+        // should return a None
+        assert_eq!(chunk.cast_ray(Ray::from(&camera)), RayResult::None);
+
+        // insert a block that the camera SHOULD be able to see
+        let block = Block::new(BlockType::Dirt);
+        let block_pos = Point3::new(2, 1, 1);
+        let _ = chunk.set_block(block_pos, block);
+        if let RayResult::Block { loc, .. } = chunk.cast_ray(Ray::from(&camera)) {
+            assert_eq!(loc, block_pos);
+        } else {
+            assert!(false);
         }
     }
 }

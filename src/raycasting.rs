@@ -23,7 +23,7 @@ impl From<&Camera> for Ray {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BlockFace {
     XPos,
     XNeg,
@@ -33,7 +33,7 @@ pub enum BlockFace {
     ZNeg,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RayResult {
     Block {
         loc: Point3<i32>,
