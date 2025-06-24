@@ -211,3 +211,15 @@ impl CameraController {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_forward() {
+        let camera = Camera::new(Point3::new(0.0, 0.0, 0.0), Rad(0.0), Rad(0.0));
+
+        assert_eq!(camera.front(), Vector3::new(1.0, 0.0, 0.0));
+    }
+}
