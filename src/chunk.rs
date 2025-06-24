@@ -9,7 +9,7 @@ use log::debug;
 
 const CHUNK_WIDTH: usize = 16;
 const CHUNK_HEIGHT: usize = 256;
-const BOTTOM_DEPTH: i32 = -12;
+const BOTTOM_DEPTH: i32 = -128;
 
 #[derive(Debug, Clone, Copy)]
 pub enum BlockType {
@@ -209,6 +209,7 @@ impl Chunk {
             pos.y - self.origin.y,
             pos.z - BOTTOM_DEPTH,
         );
+
         if point.x < 0
             || point.x >= CHUNK_WIDTH as i32
             || point.y < 0
@@ -221,6 +222,7 @@ impl Chunk {
             Ok(point.cast::<usize>().unwrap())
         }
     }
+
     pub fn set_block(&mut self, loc: Point3<i32>, block: Block) -> Result<(), ()> {
         if let Ok(local_pos) = self.world_to_local(loc) {
             // Can only place in an empty location
@@ -546,5 +548,41 @@ mod tests {
         let block_pos = Point3::new(1, 2, 1);
         let _ = chunk.set_block(block_pos, block);
         assert_eq!(chunk.cast_ray(Ray::from(&camera)), RayResult::None);
+    }
+
+    #[test]
+    fn test_chunk_insert_remove() {
+        let mut chunk = Chunk::gen_empty_chunk(Point2::new(0, 0));
+
+        // check the chunk is currently empty
+        for x in 0..CHUNK_WIDTH {
+            for y in 0..CHUNK_WIDTH {
+                for z in 0..CHUNK_HEIGHT {
+                    if let Ok(_) = chunk.remove_block(Point3::new(x as i32, y as i32, z as i32)) {
+                        assert!(false);
+                    }
+                }
+            }
+        }
+
+        // test insert
+        let pos = Point3::new(1, 2, 3);
+        if let Err(_) = chunk.set_block(pos, Block::new(BlockType::Dirt)) {
+            assert!(false, "set block failed");
+        }
+
+        // test remove
+        if let Err(_) = chunk.remove_block(pos) {
+            assert!(false, "remove block failed");
+        }
+    }
+
+    #[test]
+    fn test_world_to_local() {
+        let chunk = Chunk::gen_empty_chunk(Point2::new(0, 0));
+
+        let test_pos = Point3::new(1, 2, 3);
+        let chunk_coords = chunk.world_to_local(test_pos).unwrap();
+        assert_eq!(chunk_coords, Point3::new(1, 2, (3 - BOTTOM_DEPTH) as usize));
     }
 }
