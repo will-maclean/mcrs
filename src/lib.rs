@@ -329,7 +329,7 @@ impl State {
 
         self.surface.configure(&self.device, &self.config);
 
-        println!("Resized to {:?} from state!", new_size);
+        debug!("Resized to {:?} from state!", new_size);
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -473,10 +473,11 @@ impl State {
 
     fn handle_mouse_button(&mut self, button: MouseButton, state: ElementState) {
         if button == MouseButton::Left {
-            debug!("Mouse button press");
+            debug!("Mouse left button press");
             self.mouse_pressed = state == ElementState::Pressed;
             player_left_click(&self.camera, &mut self.chunk_manager);
         } else if button == MouseButton::Right {
+            debug!("Mouse right button press");
             player_right_click(&self.camera, &mut self.chunk_manager);
         }
     }

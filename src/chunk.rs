@@ -65,6 +65,10 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    fn get(&self, loc: Point3<usize>) -> Option<Block> {
+        self.blocks[loc.z][loc.y][loc.x]
+    }
+
     fn idx_to_world(&self, x: usize, y: usize, z: usize) -> Point3<i32> {
         Point3::new(
             x as i32 + self.origin.x,
@@ -80,7 +84,7 @@ impl Chunk {
         for x in 0..CHUNK_WIDTH {
             for y in 0..CHUNK_WIDTH {
                 for z in 0..CHUNK_HEIGHT {
-                    if let Some(block) = self.blocks[z][y][x] {
+                    if let Some(block) = self.get(Point3::new(x, y, z)) {
                         if block.visible() {
                             let position =
                                 self.idx_to_world(x, y, z).cast::<f32>().unwrap().to_vec();
@@ -118,7 +122,7 @@ impl Chunk {
 
     pub fn gen_default_chunk(origin: Point2<i32>) -> Self {
         debug!("Generating new chunk at ({:?}", origin);
-        let solid_fill_height = 10;
+        let solid_fill_height: usize = (-5 - BOTTOM_DEPTH) as usize;
 
         let mut chunk = Chunk {
             origin,
@@ -174,9 +178,7 @@ impl Chunk {
             //TODO: Check that cast works correctly
             let test_pos = test_pos_f32.cast::<i32>().unwrap();
             if let Ok(test_pos_block) = self.world_to_local(test_pos) {
-                if let Some(block) =
-                    self.blocks[test_pos_block.x][test_pos_block.y][test_pos_block.z]
-                {
+                if let Some(block) = self.get(test_pos_block) {
                     let result = RayResult::Block {
                         loc: test_pos,
                         //TODO: figure out how to do the face detection
@@ -195,10 +197,10 @@ impl Chunk {
 
     pub fn mutate_block<F>(&mut self, block_loc: Point3<i32>, f: F)
     where
-        F: FnOnce(&mut Block),
+        F: FnOnce(&mut Option<Block>),
     {
         if let Ok(local_pos) = self.world_to_local(block_loc) {
-            let mut block = self.blocks[local_pos.x][local_pos.y][local_pos.z].unwrap();
+            let mut block = self.get(local_pos);
             f(&mut block)
         }
     }
@@ -226,10 +228,10 @@ impl Chunk {
     pub fn set_block(&mut self, loc: Point3<i32>, block: Block) -> Result<(), ()> {
         if let Ok(local_pos) = self.world_to_local(loc) {
             // Can only place in an empty location
-            if let Some(_) = self.blocks[local_pos.x][local_pos.y][local_pos.z] {
+            if let Some(_) = self.get(local_pos) {
                 Err(())
             } else {
-                self.blocks[local_pos.x][local_pos.y][local_pos.z] = Some(block);
+                self.blocks[local_pos.z][local_pos.y][local_pos.x] = Some(block);
                 Ok(())
             }
         } else {
@@ -240,8 +242,8 @@ impl Chunk {
     pub fn remove_block(&mut self, loc: Point3<i32>) -> Result<Block, ()> {
         if let Ok(local_pos) = self.world_to_local(loc) {
             // Can only place in an empty location
-            if let Some(block) = self.blocks[local_pos.x][local_pos.y][local_pos.z] {
-                self.blocks[local_pos.x][local_pos.y][local_pos.z] = None;
+            if let Some(block) = self.get(local_pos) {
+                self.blocks[local_pos.z][local_pos.y][local_pos.x] = None;
                 return Ok(block);
             }
         }
@@ -323,7 +325,7 @@ impl ChunkManager {
 
     pub fn mutate_block<F>(&mut self, block_loc: Point3<i32>, f: F)
     where
-        F: FnOnce(&mut Block),
+        F: FnOnce(&mut Option<Block>),
     {
         //TODO: smarter return codes?
 
