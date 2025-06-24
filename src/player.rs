@@ -2,6 +2,12 @@ use std::time::Duration;
 
 use cgmath::{Point3, Rad, Vector3, Zero};
 
+use crate::{
+    camera::Camera,
+    chunk::{Block, BlockType, ChunkManager},
+    raycasting::{Ray, RayResult},
+};
+
 pub const GRAVITY: f32 = 9.8; // blocks / s^2
 
 pub trait Entity {
@@ -50,4 +56,33 @@ impl Entity for Player {
     }
 
     fn input(&mut self) {}
+}
+
+pub fn player_left_click(camera: &Camera, chunk_manager: &mut ChunkManager) {
+    let ray = Ray::from(camera);
+    let ray_res = chunk_manager.cast_ray(ray);
+
+    match ray_res {
+        RayResult::Block { loc, face, dist } => {
+            // break block
+            let _ = chunk_manager.remove_block(loc);
+        }
+        _ => {}
+    }
+}
+
+pub fn player_right_click(camera: &Camera, chunk_manager: &mut ChunkManager) {
+    let ray = Ray::from(camera);
+    let ray_res = chunk_manager.cast_ray(ray);
+
+    match ray_res {
+        RayResult::Block { loc, face, dist } => {
+            // break block
+            let mut new_loc = loc.clone();
+            new_loc.z += 1;
+
+            let _ = chunk_manager.set_block(new_loc, Block::new(BlockType::Dirt));
+        }
+        _ => {}
+    }
 }

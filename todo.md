@@ -25,23 +25,34 @@
 - [ ] QOL
     - [ ] Debug screen
         - [ ] Axis wireframe render
+        - [ ] FPS
         - [x] Quick text (location, view, etc.)
     - [x] Logging
 - Code refactor
     - [ ] Strip out of state -> into game::MCRS??
     - [x] Move out of lib
     - [x] Build a real game loop
+- Rendering
+    - [ ] Lighting
 - Performance
     - [ ] Instance Culling
         - Now that we can gen new chunks, we can easily have 10k+ instances
         in our render range. That means we need to start being performant
         - Few different spots where we can cull:
             - [x] At a chunk level -> frustum culling
+                - Is this actually working?? Seems like too many instances being rendered
             - At a block (instance) level -> frustum culling, backface culling, occlusion culling
             3. More advanced (GPU-side) culls
         - Can any of this be vectorised??
+    - Could do something fancy like moving expensive, rare operations like chunk gen to a different core??
 - Gameplay
     - [ ] Place/break blocks
+        - [ ] raycasting
+            - API for interacting with blocks is nearly done
+            - need to flesh out api
+            - model is to return a rayresult object that can then be operated on
+                - place and remove block still required
+            - can then do something like:
     - [ ] HUD
     - [ ] Inventory
     - [ ] Player instead of camera

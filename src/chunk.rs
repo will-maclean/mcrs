@@ -1,7 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{camera, model};
-use cgmath::{prelude::*, Point2, Vector2};
+use crate::{
+    camera, model,
+    raycasting::{BlockFace, Ray, RayResult},
+};
+use cgmath::{prelude::*, Point2, Point3, Vector2};
 use log::debug;
 
 const CHUNK_WIDTH: usize = 16;
@@ -31,16 +34,19 @@ enum BlockExposure {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Block {
-    origin_x: i32,
-    origin_y: i32,
-    origin_z: i32,
+pub struct Block {
     block_type: BlockType,
-
     exposure: BlockExposure,
 }
 
 impl Block {
+    pub fn new(block_type: BlockType) -> Self {
+        Self {
+            block_type,
+            //FIXME: implement
+            exposure: BlockExposure::External,
+        }
+    }
     fn visible(&self) -> bool {
         //TODO: this is extremely basic, but might
         //be good enough to keep us going for a while
@@ -59,35 +65,55 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    fn idx_to_world(&self, x: usize, y: usize, z: usize) -> Point3<i32> {
+        Point3::new(
+            x as i32 + self.origin.x,
+            y as i32 + self.origin.y,
+            BOTTOM_DEPTH + z as i32,
+        )
+    }
+
     pub fn gen_instances(&self) -> Vec<model::RenderInstance> {
-        self.blocks
-            .iter()
-            .flatten()
-            .flatten()
-            .flatten()
-            .filter(|b| b.visible())
-            .map(|c| {
-                let position = cgmath::Vector3 {
-                    x: self.origin.x as f32 + c.origin_x as f32,
-                    y: self.origin.y as f32 + c.origin_y as f32,
-                    z: BOTTOM_DEPTH as f32 + c.origin_z as f32,
-                };
+        //FIXME: Surely this can be done nice with some sort of mapping
+        let mut result = Vec::new();
 
-                let rotation = cgmath::Quaternion::from_axis_angle(
-                    cgmath::Vector3::unit_z(),
-                    cgmath::Deg(0.0),
-                );
-                let scale = 0.5;
+        for x in 0..CHUNK_WIDTH {
+            for y in 0..CHUNK_WIDTH {
+                for z in 0..CHUNK_HEIGHT {
+                    if let Some(block) = self.blocks[z][y][x] {
+                        if block.visible() {
+                            let position =
+                                self.idx_to_world(x, y, z).cast::<f32>().unwrap().to_vec();
 
-                model::RenderInstance {
-                    position,
-                    rotation,
-                    scale,
-                    //TODO: faster if we can use the static strings everywhere
-                    label: c.block_type.tex_label().to_string(),
+                            let rotation = cgmath::Quaternion::from_axis_angle(
+                                cgmath::Vector3::unit_z(),
+                                cgmath::Deg(0.0),
+                            );
+                            let scale = 0.5;
+
+                            result.push(model::RenderInstance {
+                                position,
+                                rotation,
+                                scale,
+                                //TODO: faster if we can use the static strings everywhere
+                                label: block.block_type.tex_label().to_string(),
+                            });
+                        }
+                    }
                 }
-            })
-            .collect::<Vec<_>>()
+            }
+        }
+
+        result
+    }
+
+    pub fn gen_empty_chunk(origin: Point2<i32>) -> Self {
+        // Probably only going to be used for testing but
+        // whatever
+        Self {
+            origin,
+            blocks: [[[None; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT],
+        }
     }
 
     pub fn gen_default_chunk(origin: Point2<i32>) -> Self {
@@ -116,9 +142,6 @@ impl Chunk {
                         BlockExposure::Internal
                     };
                     chunk.blocks[k][j][i] = Some(Block {
-                        origin_x: i as i32,
-                        origin_y: j as i32,
-                        origin_z: k as i32,
                         block_type,
                         exposure,
                     });
@@ -128,9 +151,6 @@ impl Chunk {
                     // now do some random scattering of blocks on the next row up
                     if rand::random_ratio(4, 10) && chunk.blocks[k - 1][j][i].is_some() {
                         chunk.blocks[k][j][i] = Some(Block {
-                            origin_x: i as i32,
-                            origin_y: j as i32,
-                            origin_z: k as i32,
                             block_type: BlockType::Dirt,
                             exposure: BlockExposure::External,
                         });
@@ -145,6 +165,85 @@ impl Chunk {
     fn update_exposure(&mut self) {
         //NOTE: should only be called when required, not every tick (if can be avoided)
         todo!()
+    }
+
+    pub fn cast_ray(&self, ray: Ray) -> RayResult {
+        let iter_dist = ray.max_dist / ray.n_tests as f32;
+        for i in 0..ray.n_tests {
+            let test_pos_f32 = ray.pos + (iter_dist * i as f32 * ray.dir);
+            //TODO: Check that cast works correctly
+            let test_pos = test_pos_f32.cast::<i32>().unwrap();
+            if let Ok(test_pos_block) = self.world_to_local(test_pos) {
+                if let Some(block) =
+                    self.blocks[test_pos_block.x][test_pos_block.y][test_pos_block.z]
+                {
+                    let result = RayResult::Block {
+                        loc: test_pos,
+                        //TODO: figure out how to do the face detection
+                        face: BlockFace::ZPos,
+                        dist: test_pos_f32.to_vec().magnitude(),
+                    };
+
+                    debug!("{:?}", result);
+
+                    return result;
+                }
+            }
+        }
+        RayResult::None
+    }
+
+    pub fn mutate_block<F>(&mut self, block_loc: Point3<i32>, f: F)
+    where
+        F: FnOnce(&mut Block),
+    {
+        if let Ok(local_pos) = self.world_to_local(block_loc) {
+            let mut block = self.blocks[local_pos.x][local_pos.y][local_pos.z].unwrap();
+            f(&mut block)
+        }
+    }
+
+    fn world_to_local(&self, pos: Point3<i32>) -> Result<Point3<usize>, ()> {
+        let point = Point3::new(
+            pos.x - self.origin.x,
+            pos.y - self.origin.y,
+            pos.z - BOTTOM_DEPTH,
+        );
+        if point.x < 0
+            || point.x >= CHUNK_WIDTH as i32
+            || point.y < 0
+            || point.y >= CHUNK_WIDTH as i32
+            || point.z < 0
+            || point.z >= CHUNK_HEIGHT as i32
+        {
+            Err(())
+        } else {
+            Ok(point.cast::<usize>().unwrap())
+        }
+    }
+    pub fn set_block(&mut self, loc: Point3<i32>, block: Block) -> Result<(), ()> {
+        if let Ok(local_pos) = self.world_to_local(loc) {
+            // Can only place in an empty location
+            if let Some(_) = self.blocks[local_pos.x][local_pos.y][local_pos.z] {
+                Err(())
+            } else {
+                self.blocks[local_pos.x][local_pos.y][local_pos.z] = Some(block);
+                Ok(())
+            }
+        } else {
+            Err(())
+        }
+    }
+
+    pub fn remove_block(&mut self, loc: Point3<i32>) -> Result<Block, ()> {
+        if let Ok(local_pos) = self.world_to_local(loc) {
+            // Can only place in an empty location
+            if let Some(block) = self.blocks[local_pos.x][local_pos.y][local_pos.z] {
+                self.blocks[local_pos.x][local_pos.y][local_pos.z] = None;
+                return Ok(block);
+            }
+        }
+        Err(())
     }
 }
 
@@ -204,13 +303,57 @@ impl ChunkManager {
             }
         }
 
-        debug!(
-            "ChunkManager submitting {} chunks, with {} total instances to render",
-            self.render_keys.len(),
-            instances.len()
-        );
-
         instances
+    }
+
+    pub fn cast_ray(&self, ray: Ray) -> RayResult {
+        //TODO: for now, this will only allow the play to
+        //cast rays inside their own chunk. What we really need
+        //is to do a ray cast at a chunk level, then iterate throut
+        //the results, closest to furthest, looking for a collision
+        let chunk_loc = block_to_chunk(ray.pos.cast::<i32>().unwrap());
+        if let Some(chunk) = self.chunks.get(&chunk_loc) {
+            chunk.cast_ray(ray)
+        } else {
+            RayResult::None
+        }
+    }
+
+    pub fn mutate_block<F>(&mut self, block_loc: Point3<i32>, f: F)
+    where
+        F: FnOnce(&mut Block),
+    {
+        //TODO: smarter return codes?
+
+        let chunk_loc = block_to_chunk(block_loc);
+        if let Some(chunk) = self.chunks.get_mut(&chunk_loc) {
+            chunk.mutate_block(block_loc, f)
+        }
+    }
+
+    pub fn set_block(&mut self, loc: Point3<i32>, block: Block) -> Result<(), ()> {
+        let chunk_loc = block_to_chunk(loc);
+        if let Some(chunk) = self.chunks.get_mut(&chunk_loc) {
+            chunk.set_block(loc, block)
+        } else {
+            Err(())
+        }
+    }
+
+    pub fn remove_block(&mut self, loc: Point3<i32>) -> Result<Block, ()> {
+        let chunk_loc = block_to_chunk(loc);
+        if let Some(chunk) = self.chunks.get_mut(&chunk_loc) {
+            chunk.remove_block(loc)
+        } else {
+            Err(())
+        }
+    }
+}
+
+fn block_to_chunk(block_pos: Point3<i32>) -> Point2<i32> {
+    Point2 {
+        x: block_pos.x / CHUNK_WIDTH as i32,
+        y: block_pos.y / CHUNK_WIDTH as i32,
     }
 }
 
@@ -376,5 +519,32 @@ mod tests {
         for (player_pos, dist, res) in cases {
             assert_eq!(gen_chunk_origins_near_player(player_pos, dist), res);
         }
+    }
+
+    #[test]
+    fn test_chunk_raycasting() {
+        let camera = Camera::new(Point3::new(1.0, 1.0, 1.0), Rad(0.0), Rad(0.0));
+        let chunk_origin = Point2::new(0, 0);
+        let mut chunk = Chunk::gen_empty_chunk(chunk_origin);
+
+        // now, the chunk is empty, so casting a ray now
+        // should return a None
+        assert_eq!(chunk.cast_ray(Ray::from(&camera)), RayResult::None);
+
+        // insert a block that the camera SHOULD be able to see
+        let block = Block::new(BlockType::Dirt);
+        let block_pos = Point3::new(2, 1, 1);
+        let _ = chunk.set_block(block_pos, block);
+        if let RayResult::Block { loc, .. } = chunk.cast_ray(Ray::from(&camera)) {
+            assert_eq!(loc, block_pos);
+        } else {
+            assert!(false);
+        }
+
+        // now insert a block that camera ray SHOULDN'T hit
+        let _ = chunk.remove_block(block_pos);
+        let block_pos = Point3::new(1, 2, 1);
+        let _ = chunk.set_block(block_pos, block);
+        assert_eq!(chunk.cast_ray(Ray::from(&camera)), RayResult::None);
     }
 }

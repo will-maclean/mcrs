@@ -95,22 +95,16 @@ impl<T> MCRS<T> {
         if let Some(state) = self.state_app.state.as_mut() {
             self.last_render_time = instant::Instant::now();
             state.debug_view.update_text(
-            format!(
-                "Debug View\nCamera pos: ({:.2}, {:.2}, {:.2})\nPitch: {:?}, Yaw: {:?}\nCamera forward: ({:.2}, {:.2}, {:.2})\nCamera right: ({:.2}, {:.2}, {:.2})",
-                state.camera.position.x,
-                state.camera.position.y,
-                state.camera.position.z,
-                state.camera.pitch,
-                state.camera.yaw,
-                state.camera_controller.forward.x,
-                state.camera_controller.forward.y,
-                state.camera_controller.forward.z,
-                state.camera_controller.right.x,
-                state.camera_controller.right.y,
-                state.camera_controller.right.z,
-            )
-            .as_str(),
-        );
+                format!(
+                    "Debug View\nCamera pos: ({:.2}, {:.2}, {:.2})\nPitch: {:?}, Yaw: {:?}",
+                    state.camera.position.x,
+                    state.camera.position.y,
+                    state.camera.position.z,
+                    state.camera.pitch,
+                    state.camera.yaw,
+                )
+                .as_str(),
+            );
 
             match state.render() {
                 Ok(_) => Ok(()),
