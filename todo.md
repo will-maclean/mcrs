@@ -48,11 +48,7 @@
 - Gameplay
     - [ ] Place/break blocks
         - [ ] raycasting
-            - API for interacting with blocks is nearly done
-            - need to flesh out api
-            - model is to return a rayresult object that can then be operated on
-                - place and remove block still required
-            - can then do something like:
+            - [ ] extract into some common API - currently mixed up in Chunk
     - [ ] HUD
     - [ ] Inventory
     - [ ] Player instead of camera

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     camera, model,
-    raycasting::{BlockFace, Ray, RayResult},
+    raycasting::{get_colliding_face, BlockFace, Ray, RayResult},
 };
 use cgmath::{prelude::*, Point2, Point3, Vector2};
 use log::debug;
@@ -178,11 +178,10 @@ impl Chunk {
             //TODO: Check that cast works correctly
             let test_pos = test_pos_f32.cast::<i32>().unwrap();
             if let Ok(test_pos_block) = self.world_to_local(test_pos) {
-                if let Some(block) = self.get(test_pos_block) {
+                if let Some(_) = self.get(test_pos_block) {
                     let result = RayResult::Block {
                         loc: test_pos,
-                        //TODO: figure out how to do the face detection
-                        face: BlockFace::ZPos,
+                        face: get_colliding_face(ray.pos, test_pos_f32, test_pos).unwrap(),
                         dist: test_pos_f32.to_vec().magnitude(),
                     };
 
