@@ -111,9 +111,9 @@ impl Chunk {
         result
     }
 
+    // Probably only going to be used for testing
+    #[allow(dead_code)]
     pub fn gen_empty_chunk(origin: Point2<i32>) -> Self {
-        // Probably only going to be used for testing but
-        // whatever
         Self {
             origin,
             blocks: [[[None; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT],
@@ -173,15 +173,15 @@ impl Chunk {
 
     pub fn cast_ray(&self, ray: Ray) -> RayResult {
         let iter_dist = ray.max_dist / ray.n_tests as f32;
-        for i in 0..ray.n_tests {
-            let test_pos_f32 = ray.pos + (iter_dist * i as f32 * ray.dir);
-            //TODO: Check that cast works correctly
-            let test_pos = test_pos_f32.cast::<i32>().unwrap();
+        let iter_ray = ray.dir.normalize() * iter_dist;
+        let mut test_pos_f32 = ray.pos.clone();
+        for _ in 0..ray.n_tests {
+            let test_pos = point_to_world(test_pos_f32);
             if let Ok(test_pos_block) = self.world_to_local(test_pos) {
                 if let Some(_) = self.get(test_pos_block) {
                     let result = RayResult::Block {
                         loc: test_pos,
-                        face: get_colliding_face(ray.pos, test_pos_f32, test_pos).unwrap(),
+                        face: get_colliding_face(ray, test_pos_f32, test_pos).unwrap(),
                         dist: test_pos_f32.to_vec().magnitude(),
                     };
 
@@ -190,6 +190,8 @@ impl Chunk {
                     return result;
                 }
             }
+
+            test_pos_f32 += iter_ray;
         }
         RayResult::None
     }
@@ -353,6 +355,14 @@ impl ChunkManager {
     }
 }
 
+fn point_to_world(point: Point3<f32>) -> Point3<i32> {
+    Point3::new(
+        point.x.floor() as i32,
+        point.y.floor() as i32,
+        point.z.floor() as i32,
+    )
+}
+
 fn block_to_chunk(block_pos: Point3<i32>) -> Point2<i32> {
     Point2 {
         x: block_pos.x / CHUNK_WIDTH as i32,
@@ -455,7 +465,7 @@ fn in_camera_view(
 
 #[cfg(test)]
 mod tests {
-    use cgmath::{Deg, Point3, Rad};
+    use cgmath::{Deg, Point3, Rad, Vector3};
 
     use crate::camera::Camera;
 
@@ -526,7 +536,7 @@ mod tests {
 
     #[test]
     fn test_chunk_raycasting() {
-        let camera = Camera::new(Point3::new(1.0, 1.0, 1.0), Rad(0.0), Rad(0.0));
+        let camera = Camera::new(Point3::new(1.0, 1.5, 1.5), Rad(0.0), Rad(0.0));
         let chunk_origin = Point2::new(0, 0);
         let mut chunk = Chunk::gen_empty_chunk(chunk_origin);
 
@@ -585,5 +595,41 @@ mod tests {
         let test_pos = Point3::new(1, 2, 3);
         let chunk_coords = chunk.world_to_local(test_pos).unwrap();
         assert_eq!(chunk_coords, Point3::new(1, 2, (3 - BOTTOM_DEPTH) as usize));
+    }
+
+    #[test]
+    fn test_vec_cast() {
+        // test some vec casts, just for my poor wiltering sanity
+
+        assert_eq!(
+            Vector3::new(1.0, 2.0, 3.0).cast::<usize>().unwrap(),
+            Vector3::new(1, 2, 3)
+        );
+
+        assert_eq!(
+            Vector3::new(1.0, -2.0, 3.0).cast::<i32>().unwrap(),
+            Vector3::new(1, -2, 3)
+        );
+
+        assert_eq!(
+            Vector3::new(1.1, 2.9, 3.5).cast::<usize>().unwrap(),
+            Vector3::new(1, 2, 3)
+        );
+
+        assert_eq!(
+            Vector3::new(-1.5, -2.1, -3.9).cast::<i32>().unwrap(),
+            Vector3::new(-1, -2, -3)
+        );
+
+        // takeaway -> casting from float to i32/usize will NOT round;
+        // rather, it clips to the integer portion
+    }
+
+    #[test]
+    fn test_point_to_world() {
+        let cases = vec![
+            (Point3::new(1.01, 1.9, 1.5), Point3::new(1, 1, 1)),
+            (Point3::new(-1.01, -1.9, -1.5), Point3::new(-2, -2, -2)),
+        ];
     }
 }

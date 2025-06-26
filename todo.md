@@ -50,6 +50,7 @@
         - [ ] raycasting
             - [ ] extract into some common API - currently mixed up in Chunk
     - [ ] HUD
+        - [ ] crosshairs
     - [ ] Inventory
     - [ ] Player instead of camera
         - [ ] Gravity
