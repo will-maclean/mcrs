@@ -1,3 +1,43 @@
+fn face_rotation_matrix(face_idx: u32) -> mat3x3<f32> {
+    if face_idx == 0u { // +Z
+        return mat3x3<f32>(
+            vec3<f32>(1.0, 0.0, 0.0),
+            vec3<f32>(0.0, 1.0, 0.0),
+            vec3<f32>(0.0, 0.0, 1.0),
+        );
+    } else if face_idx == 1u { // -Z
+        return mat3x3<f32>(
+            vec3<f32>(-1.0, 0.0,  0.0),
+            vec3<f32>( 0.0, 1.0,  0.0),
+            vec3<f32>( 0.0, 0.0, -1.0),
+        );
+    } else if face_idx == 2u { // -X
+        return mat3x3<f32>(
+            vec3<f32>(0.0, 0.0, -1.0),
+            vec3<f32>(0.0, 1.0,  0.0),
+            vec3<f32>(-1.0, 0.0, 0.0),
+        );
+    } else if face_idx == 3u { // +X
+        return mat3x3<f32>(
+            vec3<f32>(0.0, 0.0, 1.0),
+            vec3<f32>(0.0, 1.0, 0.0),
+            vec3<f32>(1.0, 0.0, 0.0),
+        );
+    } else if face_idx == 4u { // +Y
+        return mat3x3<f32>(
+            vec3<f32>(1.0, 0.0, 0.0),
+            vec3<f32>(0.0, 0.0, 1.0),
+            vec3<f32>(0.0, 1.0, 0.0),
+        );
+    } else { // 5: -Y
+        return mat3x3<f32>(
+            vec3<f32>(1.0,  0.0,  0.0),
+            vec3<f32>(0.0,  0.0, -1.0),
+            vec3<f32>(0.0, -1.0,  0.0),
+        );
+    }
+}
+
 // Vertex shader
 struct InstanceInput {
     @location(5) model_matrix_0: vec4<f32>,
@@ -35,9 +75,16 @@ fn vs_main(
         instance.model_matrix_2,
         instance.model_matrix_3,
     );
+
+    let face_rotation = face_rotation_matrix(instance.face_idx);
+    let rotated_position = face_rotation * model.position;
+
+    let world_position = model_matrix * vec4<f32>(rotated_position, 1.0);
+    let clip_position = camera.view_proj * world_position;
+
     var out: VertexOutput;
+    out.clip_position = clip_position;
     out.tex_coords = model.tex_coords;
-    out.clip_position = camera.view_proj * model_matrix * vec4<f32>(model.position, 1.0);
     out.tex_idx = instance.tex_idx;
     return out;
 }

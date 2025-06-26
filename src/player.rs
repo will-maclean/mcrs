@@ -3,8 +3,9 @@ use std::time::Duration;
 use cgmath::{Point3, Rad, Vector3, Zero};
 
 use crate::{
+    block::{Block, BlockType},
     camera::Camera,
-    chunk::{Block, BlockType, ChunkManager},
+    chunk::ChunkManager,
     raycasting::{Ray, RayResult},
 };
 

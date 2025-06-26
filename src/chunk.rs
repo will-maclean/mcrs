@@ -1,61 +1,83 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
+    block::{Block, BlockFace, BlockType},
     camera, model,
-    raycasting::{get_colliding_face, BlockFace, Ray, RayResult},
+    raycasting::{get_colliding_face, Ray, RayResult},
 };
 use cgmath::{prelude::*, Point2, Point3, Vector2};
 use log::debug;
+use strum::IntoEnumIterator;
 
 const CHUNK_WIDTH: usize = 16;
 const CHUNK_HEIGHT: usize = 256;
 const BOTTOM_DEPTH: i32 = -128;
 
-#[derive(Debug, Clone, Copy)]
-pub enum BlockType {
-    Dirt,
-    Stone,
+#[derive(Debug, Copy, Clone)]
+pub enum ChunkCoord {
+    Local(Point3<usize>),
+    World(Point3<i32>),
 }
 
-impl BlockType {
-    fn tex_label(&self) -> &'static str {
+impl From<Point3<f32>> for ChunkCoord {
+    fn from(value: Point3<f32>) -> Self {
+        chunk_coord_global(
+            value.x.floor() as i32,
+            value.y.floor() as i32,
+            value.z.floor() as i32,
+        )
+    }
+}
+
+impl From<Point3<i32>> for ChunkCoord {
+    fn from(value: Point3<i32>) -> Self {
+        ChunkCoord::World(value)
+    }
+}
+
+impl ChunkCoord {
+    pub fn to_local(self, chunk_origin: Point2<i32>) -> Result<Point3<usize>, ()> {
         match self {
-            Self::Dirt => "dirt",
-            Self::Stone => "stone",
+            ChunkCoord::Local(pos) => Ok(pos),
+            ChunkCoord::World(pos) => {
+                let point = Point3::new(
+                    pos.x - chunk_origin.x,
+                    pos.y - chunk_origin.y,
+                    pos.z - BOTTOM_DEPTH,
+                );
+
+                if point.x < 0
+                    || point.x >= CHUNK_WIDTH as i32
+                    || point.y < 0
+                    || point.y >= CHUNK_WIDTH as i32
+                    || point.z < 0
+                    || point.z >= CHUNK_HEIGHT as i32
+                {
+                    Err(())
+                } else {
+                    Ok(point.cast::<usize>().unwrap())
+                }
+            }
+        }
+    }
+    pub fn to_world(self, chunk_origin: Point2<i32>) -> Point3<i32> {
+        match self {
+            ChunkCoord::Local(pos) => Point3::new(
+                chunk_origin.x + pos.x as i32,
+                chunk_origin.y + pos.y as i32,
+                pos.z as i32 + BOTTOM_DEPTH,
+            ),
+            ChunkCoord::World(pos) => pos,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum BlockExposure {
-    Internal,
-    External,
-    ChunkBorder,
+pub fn chunk_coord_local(x: usize, y: usize, z: usize) -> ChunkCoord {
+    ChunkCoord::Local(Point3::new(x, y, z))
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Block {
-    block_type: BlockType,
-    exposure: BlockExposure,
-}
-
-impl Block {
-    pub fn new(block_type: BlockType) -> Self {
-        Self {
-            block_type,
-            //FIXME: implement
-            exposure: BlockExposure::External,
-        }
-    }
-    fn visible(&self) -> bool {
-        //TODO: this is extremely basic, but might
-        //be good enough to keep us going for a while
-        match self.exposure {
-            BlockExposure::ChunkBorder => false,
-            BlockExposure::Internal => false,
-            BlockExposure::External => true,
-        }
-    }
+pub fn chunk_coord_global(x: i32, y: i32, z: i32) -> ChunkCoord {
+    ChunkCoord::World(Point3::new(x, y, z))
 }
 
 #[derive(Debug, Clone)]
@@ -65,16 +87,9 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    fn get(&self, loc: Point3<usize>) -> Option<Block> {
+    fn get(&self, loc: ChunkCoord) -> Option<Block> {
+        let loc = loc.to_local(self.origin).unwrap();
         self.blocks[loc.z][loc.y][loc.x]
-    }
-
-    fn idx_to_world(&self, x: usize, y: usize, z: usize) -> Point3<i32> {
-        Point3::new(
-            x as i32 + self.origin.x,
-            y as i32 + self.origin.y,
-            BOTTOM_DEPTH + z as i32,
-        )
     }
 
     pub fn gen_instances(&self) -> Vec<model::RenderInstance> {
@@ -84,24 +99,30 @@ impl Chunk {
         for x in 0..CHUNK_WIDTH {
             for y in 0..CHUNK_WIDTH {
                 for z in 0..CHUNK_HEIGHT {
-                    if let Some(block) = self.get(Point3::new(x, y, z)) {
-                        if block.visible() {
-                            let position =
-                                self.idx_to_world(x, y, z).cast::<f32>().unwrap().to_vec();
+                    if let Some(block) = self.get(chunk_coord_local(x, y, z)) {
+                        for face in BlockFace::iter() {
+                            if block.visible(face) {
+                                let position = chunk_coord_local(x, y, z)
+                                    .to_world(self.origin)
+                                    .cast::<f32>()
+                                    .unwrap()
+                                    .to_vec();
 
-                            let rotation = cgmath::Quaternion::from_axis_angle(
-                                cgmath::Vector3::unit_z(),
-                                cgmath::Deg(0.0),
-                            );
-                            let scale = 0.5;
+                                let rotation = cgmath::Quaternion::from_axis_angle(
+                                    cgmath::Vector3::unit_z(),
+                                    cgmath::Deg(0.0),
+                                );
+                                let scale = 0.5;
 
-                            result.push(model::RenderInstance {
-                                position,
-                                rotation,
-                                scale,
-                                //TODO: faster if we can use the static strings everywhere
-                                label: block.block_type.tex_label().to_string(),
-                            });
+                                result.push(model::RenderInstance {
+                                    position,
+                                    rotation,
+                                    scale,
+                                    //TODO: faster if we can use the static strings everywhere
+                                    label: block.block_type.tex_label().to_string(),
+                                    face,
+                                });
+                            }
                         }
                     }
                 }
@@ -138,37 +159,53 @@ impl Chunk {
                         BlockType::Stone
                     };
 
-                    let exposure = if k == solid_fill_height - 1 {
-                        BlockExposure::External
-                    } else if i == 0 || i == CHUNK_WIDTH - 1 || j == 0 || j == CHUNK_WIDTH - 1 {
-                        BlockExposure::ChunkBorder
-                    } else {
-                        BlockExposure::Internal
-                    };
-                    chunk.blocks[k][j][i] = Some(Block {
-                        block_type,
-                        exposure,
-                    });
+                    chunk.blocks[k][j][i] = Some(Block::new(block_type));
                 }
 
                 for k in solid_fill_height..solid_fill_height + 3 {
                     // now do some random scattering of blocks on the next row up
                     if rand::random_ratio(4, 10) && chunk.blocks[k - 1][j][i].is_some() {
-                        chunk.blocks[k][j][i] = Some(Block {
-                            block_type: BlockType::Dirt,
-                            exposure: BlockExposure::External,
-                        });
+                        chunk.blocks[k][j][i] = Some(Block::new(BlockType::Dirt));
                     }
                 }
             }
         }
 
+        chunk.update_exposure_chunk(None);
+
         chunk
     }
 
-    fn update_exposure(&mut self) {
-        //NOTE: should only be called when required, not every tick (if can be avoided)
-        todo!()
+    pub fn update_exposure_chunk(&mut self, chunk_manager: Option<&ChunkManager>) {
+        for x in 0..CHUNK_WIDTH {
+            for y in 0..CHUNK_WIDTH {
+                for z in 0..CHUNK_HEIGHT {
+                    let pos = chunk_coord_local(x, y, z);
+                    if let Some(_) = self.get(pos) {
+                        self.update_exposure_block(pos, chunk_manager);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn update_exposure_around(
+        &mut self,
+        pos: ChunkCoord,
+        chunk_manager: Option<&ChunkManager>,
+    ) {
+        let global_pos = pos.to_world(self.origin);
+        for face in BlockFace::iter() {
+            let adjacent_block_global = face.adjacent_loc_from(global_pos);
+            self.update_exposure_block(ChunkCoord::from(adjacent_block_global), chunk_manager);
+        }
+    }
+
+    pub fn update_exposure_block(&mut self, pos: ChunkCoord, chunk_manager: Option<&ChunkManager>) {
+        // go through and update all the different faces
+        for face in BlockFace::iter() {
+            todo!();
+        }
     }
 
     pub fn cast_ray(&self, ray: Ray) -> RayResult {
@@ -176,19 +213,18 @@ impl Chunk {
         let iter_ray = ray.dir.normalize() * iter_dist;
         let mut test_pos_f32 = ray.pos.clone();
         for _ in 0..ray.n_tests {
-            let test_pos = point_to_world(test_pos_f32);
-            if let Ok(test_pos_block) = self.world_to_local(test_pos) {
-                if let Some(_) = self.get(test_pos_block) {
-                    let result = RayResult::Block {
-                        loc: test_pos,
-                        face: get_colliding_face(ray, test_pos_f32, test_pos).unwrap(),
-                        dist: test_pos_f32.to_vec().magnitude(),
-                    };
+            let test_pos = ChunkCoord::from(test_pos_f32);
+            if let Some(_) = self.get(test_pos) {
+                let result = RayResult::Block {
+                    loc: test_pos.to_world(self.origin),
+                    face: get_colliding_face(ray, test_pos_f32, test_pos.to_world(self.origin))
+                        .unwrap(),
+                    dist: test_pos_f32.to_vec().magnitude(),
+                };
 
-                    debug!("{:?}", result);
+                debug!("{:?}", result);
 
-                    return result;
-                }
+                return result;
             }
 
             test_pos_f32 += iter_ray;
@@ -200,55 +236,32 @@ impl Chunk {
     where
         F: FnOnce(&mut Option<Block>),
     {
-        if let Ok(local_pos) = self.world_to_local(block_loc) {
-            let mut block = self.get(local_pos);
-            f(&mut block)
-        }
-    }
-
-    fn world_to_local(&self, pos: Point3<i32>) -> Result<Point3<usize>, ()> {
-        let point = Point3::new(
-            pos.x - self.origin.x,
-            pos.y - self.origin.y,
-            pos.z - BOTTOM_DEPTH,
-        );
-
-        if point.x < 0
-            || point.x >= CHUNK_WIDTH as i32
-            || point.y < 0
-            || point.y >= CHUNK_WIDTH as i32
-            || point.z < 0
-            || point.z >= CHUNK_HEIGHT as i32
-        {
-            Err(())
-        } else {
-            Ok(point.cast::<usize>().unwrap())
-        }
+        let mut block = self.get(ChunkCoord::from(block_loc));
+        f(&mut block)
     }
 
     pub fn set_block(&mut self, loc: Point3<i32>, block: Block) -> Result<(), ()> {
-        if let Ok(local_pos) = self.world_to_local(loc) {
-            // Can only place in an empty location
-            if let Some(_) = self.get(local_pos) {
-                Err(())
-            } else {
-                self.blocks[local_pos.z][local_pos.y][local_pos.x] = Some(block);
-                Ok(())
-            }
-        } else {
+        let coord = ChunkCoord::from(loc);
+        // Can only place in an empty location
+        if let Some(_) = self.get(coord) {
             Err(())
+        } else {
+            let local_coords = coord.to_local(self.origin).unwrap();
+            self.blocks[local_coords.z][local_coords.y][local_coords.x] = Some(block);
+            Ok(())
         }
     }
 
     pub fn remove_block(&mut self, loc: Point3<i32>) -> Result<Block, ()> {
-        if let Ok(local_pos) = self.world_to_local(loc) {
-            // Can only place in an empty location
-            if let Some(block) = self.get(local_pos) {
-                self.blocks[local_pos.z][local_pos.y][local_pos.x] = None;
-                return Ok(block);
-            }
+        let coord = ChunkCoord::from(loc);
+        // Can only place in an empty location
+        if let Some(block) = self.get(coord) {
+            let local_coords = coord.to_local(self.origin).unwrap();
+            self.blocks[local_coords.z][local_coords.y][local_coords.x] = None;
+            Ok(block)
+        } else {
+            Err(())
         }
-        Err(())
     }
 }
 
@@ -353,14 +366,6 @@ impl ChunkManager {
             Err(())
         }
     }
-}
-
-fn point_to_world(point: Point3<f32>) -> Point3<i32> {
-    Point3::new(
-        point.x.floor() as i32,
-        point.y.floor() as i32,
-        point.z.floor() as i32,
-    )
 }
 
 fn block_to_chunk(block_pos: Point3<i32>) -> Point2<i32> {
@@ -589,15 +594,6 @@ mod tests {
     }
 
     #[test]
-    fn test_world_to_local() {
-        let chunk = Chunk::gen_empty_chunk(Point2::new(0, 0));
-
-        let test_pos = Point3::new(1, 2, 3);
-        let chunk_coords = chunk.world_to_local(test_pos).unwrap();
-        assert_eq!(chunk_coords, Point3::new(1, 2, (3 - BOTTOM_DEPTH) as usize));
-    }
-
-    #[test]
     fn test_vec_cast() {
         // test some vec casts, just for my poor wiltering sanity
 
@@ -623,13 +619,5 @@ mod tests {
 
         // takeaway -> casting from float to i32/usize will NOT round;
         // rather, it clips to the integer portion
-    }
-
-    #[test]
-    fn test_point_to_world() {
-        let cases = vec![
-            (Point3::new(1.01, 1.9, 1.5), Point3::new(1, 1, 1)),
-            (Point3::new(-1.01, -1.9, -1.5), Point3::new(-2, -2, -2)),
-        ];
     }
 }

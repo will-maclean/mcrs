@@ -1,6 +1,10 @@
 use cgmath::{num_traits::float::TotalOrder, Point3, Vector3};
+use strum::{EnumIter, IntoEnumIterator};
 
-use crate::camera::Camera;
+use crate::{
+    block::{block_contains, BlockFace},
+    camera::Camera,
+};
 
 #[derive(Debug, Clone)]
 pub struct Ray {
@@ -21,32 +25,6 @@ impl From<&Camera> for Ray {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BlockFace {
-    XPos,
-    XNeg,
-    YPos,
-    YNeg,
-    ZPos,
-    ZNeg,
-}
-
-impl BlockFace {
-    pub fn adjacent_loc_from(&self, loc: Point3<i32>) -> Point3<i32> {
-        let mut new_loc = loc.clone();
-        match self {
-            BlockFace::XPos => new_loc.x += 1,
-            BlockFace::XNeg => new_loc.x -= 1,
-            BlockFace::YPos => new_loc.y += 1,
-            BlockFace::YNeg => new_loc.y -= 1,
-            BlockFace::ZPos => new_loc.z += 1,
-            BlockFace::ZNeg => new_loc.z -= 1,
-        }
-
-        new_loc
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum RayResult {
     Block {
@@ -57,17 +35,6 @@ pub enum RayResult {
     #[allow(dead_code)]
     Entity,
     None,
-}
-
-pub fn block_contains(block_pos: Point3<i32>, test_pos: Point3<f32>) -> bool {
-    let block_pos = block_pos.cast::<f32>().unwrap();
-
-    test_pos.x >= block_pos.x
-        && test_pos.x <= (block_pos.x + 1.0)
-        && test_pos.y >= block_pos.y
-        && test_pos.y <= (block_pos.y + 1.0)
-        && test_pos.z >= block_pos.z
-        && test_pos.z <= (block_pos.z + 1.0)
 }
 
 pub fn get_colliding_face(

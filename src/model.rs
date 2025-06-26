@@ -1,4 +1,6 @@
-use crate::texture;
+use wgpu::util::DeviceExt;
+
+use crate::{block::BlockFace, texture};
 
 pub trait Vertex {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
@@ -12,155 +14,53 @@ pub struct ModelVertex {
     pub normal: [f32; 3],
 }
 
-struct CubeModel {
-    // All the faces have indexing (0, 1, 2) and (1, 2, 3)
-    pub vertices: [[ModelVertex; 4]; 6],
-}
+pub fn cube_mesh(device: &wgpu::Device) -> Model {
+    let vertices = [
+        // XPos
+        [
+            ModelVertex {
+                position: [1.0, 0.0, 0.0],
+                tex_coords: [0.0, 1.0],
+                normal: [0.0, 0.0, 0.0],
+            },
+            ModelVertex {
+                position: [1.0, 1.0, 0.0],
+                tex_coords: [0.0, 0.0],
+                normal: [0.0, 0.0, 0.0],
+            },
+            ModelVertex {
+                position: [1.0, 1.0, 1.0],
+                tex_coords: [1.0, 0.0],
+                normal: [0.0, 0.0, 0.0],
+            },
+            ModelVertex {
+                position: [1.0, 0.0, 1.0],
+                tex_coords: [1.0, 1.0],
+                normal: [0.0, 0.0, 0.0],
+            },
+        ],
+    ];
 
-impl Default for CubeModel {
-    fn default() -> Self {
-        let vertices = [
-            // XPos
-            [
-                ModelVertex {
-                    position: [1.0, 0.0, 0.0],
-                    tex_coords: [0.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [1.0, 1.0, 0.0],
-                    tex_coords: [0.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [1.0, 1.0, 1.0],
-                    tex_coords: [1.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [1.0, 0.0, 1.0],
-                    tex_coords: [1.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-            ],
-            // XNeg
-            [
-                ModelVertex {
-                    position: [0.0, 0.0, 1.0],
-                    tex_coords: [0.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [0.0, 1.0, 1.0],
-                    tex_coords: [0.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [0.0, 1.0, 0.0],
-                    tex_coords: [1.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [0.0, 0.0, 0.0],
-                    tex_coords: [1.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-            ],
-            // YPos
-            [
-                ModelVertex {
-                    position: [0.0, 1.0, 0.0],
-                    tex_coords: [0.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [0.0, 1.0, 1.0],
-                    tex_coords: [0.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [1.0, 1.0, 1.0],
-                    tex_coords: [1.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [1.0, 1.0, 0.0],
-                    tex_coords: [1.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-            ],
-            // YNeg
-            [
-                ModelVertex {
-                    position: [0.0, 0.0, 1.0],
-                    tex_coords: [0.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [0.0, 0.0, 0.0],
-                    tex_coords: [0.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [1.0, 0.0, 0.0],
-                    tex_coords: [1.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [1.0, 0.0, 1.0],
-                    tex_coords: [1.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-            ],
-            // ZPos
-            [
-                ModelVertex {
-                    position: [1.0, 0.0, 1.0],
-                    tex_coords: [0.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [1.0, 1.0, 1.0],
-                    tex_coords: [0.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [0.0, 1.0, 1.0],
-                    tex_coords: [1.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [0.0, 0.0, 1.0],
-                    tex_coords: [1.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-            ],
-            // ZNeg
-            [
-                ModelVertex {
-                    position: [0.0, 0.0, 0.0],
-                    tex_coords: [0.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [0.0, 1.0, 0.0],
-                    tex_coords: [0.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [1.0, 1.0, 0.0],
-                    tex_coords: [1.0, 0.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-                ModelVertex {
-                    position: [1.0, 0.0, 0.0],
-                    tex_coords: [1.0, 1.0],
-                    normal: [0.0, 0.0, 0.0],
-                },
-            ],
-        ];
+    let indices = vec![[0, 1, 2], [1, 2, 3]];
 
-        Self { vertices }
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("cube_vertices"),
+        contents: bytemuck::cast_slice(&vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("cube_indices"),
+        contents: bytemuck::cast_slice(&indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+
+    Model {
+        meshes: vec![Mesh {
+            name: "Cube".to_string(),
+            vertex_buffer,
+            index_buffer,
+            n_elements: vertices.len() as u32,
+        }],
     }
 }
 
@@ -210,6 +110,7 @@ pub struct RenderInstance {
     pub rotation: cgmath::Quaternion<f32>,
     pub scale: f32,
     pub label: String,
+    pub face: BlockFace,
 }
 
 impl RenderInstance {
@@ -220,6 +121,7 @@ impl RenderInstance {
                 * cgmath::Matrix4::from_scale(self.scale))
             .into(),
             tex_idx: texture_manger.lookup_idx(&self.label).unwrap() as u32,
+            face_idx: self.face as u32,
         }
     }
 }
@@ -229,6 +131,7 @@ impl RenderInstance {
 pub struct RenderInstanceRaw {
     model: [[f32; 4]; 4],
     tex_idx: u32,
+    face_idx: u32,
 }
 
 impl RenderInstanceRaw {

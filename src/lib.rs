@@ -19,6 +19,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
 
 pub mod app;
+mod block;
 pub mod camera;
 mod chunk;
 mod debug_view;
@@ -177,8 +178,7 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let obj_model =
-            pollster::block_on(resources::load_model("simple_cube.obj", &device)).unwrap();
+        let obj_model = model::cube_mesh(&device);
 
         let debug_view =
             debug_view::DebugView::new(&device, &config, &queue, window_arc.scale_factor());
@@ -333,6 +333,7 @@ impl State {
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        self.n_instances = self.update_instances();
         let output = self.surface.get_current_texture().unwrap();
         let view = output
             .texture
@@ -392,7 +393,6 @@ impl State {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
-        // self.window.request_redraw();
 
         Ok(())
     }
@@ -459,7 +459,6 @@ impl State {
 
     pub fn update(&mut self, dt: instant::Duration) {
         self.chunk_manager.update(&self.camera, &self.projection);
-        self.n_instances = self.update_instances();
         self.camera_controller.update_camera(&mut self.camera, dt);
         self.camera_uniform
             .update_view_proj(&self.camera, &self.projection);
