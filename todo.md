@@ -7,6 +7,7 @@
     - [x] Block textures (different texture per side)
     - [x] Obj textures
     - [ ] Different textures on different sides of the one bloc
+        - [ ] can then update visibiility at a face level as well
 - [x] Coord/Camera cleanup
     - [x] Movement not aligned?
 - [ ] Chunks

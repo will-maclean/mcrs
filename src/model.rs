@@ -12,6 +12,158 @@ pub struct ModelVertex {
     pub normal: [f32; 3],
 }
 
+struct CubeModel {
+    // All the faces have indexing (0, 1, 2) and (1, 2, 3)
+    pub vertices: [[ModelVertex; 4]; 6],
+}
+
+impl Default for CubeModel {
+    fn default() -> Self {
+        let vertices = [
+            // XPos
+            [
+                ModelVertex {
+                    position: [1.0, 0.0, 0.0],
+                    tex_coords: [0.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [1.0, 1.0, 0.0],
+                    tex_coords: [0.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [1.0, 1.0, 1.0],
+                    tex_coords: [1.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [1.0, 0.0, 1.0],
+                    tex_coords: [1.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+            ],
+            // XNeg
+            [
+                ModelVertex {
+                    position: [0.0, 0.0, 1.0],
+                    tex_coords: [0.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [0.0, 1.0, 1.0],
+                    tex_coords: [0.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [0.0, 1.0, 0.0],
+                    tex_coords: [1.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [0.0, 0.0, 0.0],
+                    tex_coords: [1.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+            ],
+            // YPos
+            [
+                ModelVertex {
+                    position: [0.0, 1.0, 0.0],
+                    tex_coords: [0.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [0.0, 1.0, 1.0],
+                    tex_coords: [0.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [1.0, 1.0, 1.0],
+                    tex_coords: [1.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [1.0, 1.0, 0.0],
+                    tex_coords: [1.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+            ],
+            // YNeg
+            [
+                ModelVertex {
+                    position: [0.0, 0.0, 1.0],
+                    tex_coords: [0.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [0.0, 0.0, 0.0],
+                    tex_coords: [0.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [1.0, 0.0, 0.0],
+                    tex_coords: [1.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [1.0, 0.0, 1.0],
+                    tex_coords: [1.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+            ],
+            // ZPos
+            [
+                ModelVertex {
+                    position: [1.0, 0.0, 1.0],
+                    tex_coords: [0.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [1.0, 1.0, 1.0],
+                    tex_coords: [0.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [0.0, 1.0, 1.0],
+                    tex_coords: [1.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [0.0, 0.0, 1.0],
+                    tex_coords: [1.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+            ],
+            // ZNeg
+            [
+                ModelVertex {
+                    position: [0.0, 0.0, 0.0],
+                    tex_coords: [0.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [0.0, 1.0, 0.0],
+                    tex_coords: [0.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [1.0, 1.0, 0.0],
+                    tex_coords: [1.0, 0.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+                ModelVertex {
+                    position: [1.0, 0.0, 0.0],
+                    tex_coords: [1.0, 1.0],
+                    normal: [0.0, 0.0, 0.0],
+                },
+            ],
+        ];
+
+        Self { vertices }
+    }
+}
+
 impl Vertex for ModelVertex {
     fn desc() -> wgpu::VertexBufferLayout<'static> {
         use std::mem;
