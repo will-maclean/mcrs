@@ -40,12 +40,12 @@ fn face_rotation_matrix(face_idx: u32) -> mat3x3<f32> {
 
 // Vertex shader
 struct InstanceInput {
-    @location(5) model_matrix_0: vec4<f32>,
-    @location(6) model_matrix_1: vec4<f32>,
-    @location(7) model_matrix_2: vec4<f32>,
-    @location(8) model_matrix_3: vec4<f32>,
-    @location(9) tex_idx: u32,
-    @location(10) face_idx: u32,
+    @location(3) model_matrix_0: vec4<f32>,
+    @location(4) model_matrix_1: vec4<f32>,
+    @location(5) model_matrix_2: vec4<f32>,
+    @location(6) model_matrix_3: vec4<f32>,
+    @location(7) tex_idx: u32,
+    @location(8) face_idx: u32,
 }
 struct CameraUniform {
     view_proj: mat4x4<f32>,

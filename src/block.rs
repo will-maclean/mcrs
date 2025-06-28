@@ -17,13 +17,6 @@ impl BlockType {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum BlockExposure {
-    Internal,
-    External,
-    ChunkBorder,
-}
-
-#[derive(Debug, Clone, Copy)]
 pub struct Block {
     pub block_type: BlockType,
     visible_arr: [bool; 6],

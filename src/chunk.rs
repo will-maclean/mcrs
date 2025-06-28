@@ -87,9 +87,30 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    fn get(&self, loc: ChunkCoord) -> Option<Block> {
-        let loc = loc.to_local(self.origin).unwrap();
-        self.blocks[loc.z][loc.y][loc.x]
+
+    fn get_ref(&self, loc: ChunkCoord) -> Result<&Option<Block>, ()> {
+        if let Ok(local_loc) = loc.to_local(self.origin) {
+            Ok(&self.blocks[local_loc.z][local_loc.y][local_loc.x])
+        } else {
+            Err(())
+        }
+    }
+    
+    fn get_ref_mut(&mut self, loc: ChunkCoord) -> Result<&mut Option<Block>, ()> {
+        if let Ok(local_loc) = loc.to_local(self.origin) {
+            Ok(&mut self.blocks[local_loc.z][local_loc.y][local_loc.x])
+        } else {
+            Err(())
+        }
+    }
+
+
+    fn get(&self, loc: ChunkCoord) -> Result<Option<Block>, ()> {
+        if let Ok(local_loc) = loc.to_local(self.origin) {
+            Ok(self.blocks[local_loc.z][local_loc.y][local_loc.x])
+        } else {
+            Err(())
+        }
     }
 
     pub fn gen_instances(&self) -> Vec<model::RenderInstance> {
@@ -99,7 +120,7 @@ impl Chunk {
         for x in 0..CHUNK_WIDTH {
             for y in 0..CHUNK_WIDTH {
                 for z in 0..CHUNK_HEIGHT {
-                    if let Some(block) = self.get(chunk_coord_local(x, y, z)) {
+                    if let Some(block) = self.get(chunk_coord_local(x, y, z)).unwrap() {
                         for face in BlockFace::iter() {
                             if block.visible(face) {
                                 let position = chunk_coord_local(x, y, z)
@@ -128,6 +149,11 @@ impl Chunk {
                 }
             }
         }
+
+        debug!(
+            "ChunkManager submitting {} instances (faces) to render",
+            result.len()
+        );
 
         result
     }
@@ -181,7 +207,7 @@ impl Chunk {
             for y in 0..CHUNK_WIDTH {
                 for z in 0..CHUNK_HEIGHT {
                     let pos = chunk_coord_local(x, y, z);
-                    if let Some(_) = self.get(pos) {
+                    if let Some(_) = self.get(pos).unwrap() {
                         self.update_exposure_block(pos, chunk_manager);
                     }
                 }
@@ -203,8 +229,47 @@ impl Chunk {
 
     pub fn update_exposure_block(&mut self, pos: ChunkCoord, chunk_manager: Option<&ChunkManager>) {
         // go through and update all the different faces
+
+        // because of the borrow checker, this is a two step process. First, we
+        // check the visibility of each face, then we update the block with the
+        // visibility information
+
+        let mut visibilities = Vec::new();
         for face in BlockFace::iter() {
-            todo!();
+            let test_pos =
+                ChunkCoord::from(face.adjacent_loc_from(pos.to_world(self.origin)));
+            let visible = match test_pos.to_local(self.origin) {
+                Ok(_) => {
+                    // test_pos is in this chunK
+                    !self.block_at(test_pos)
+                }
+                Err(_) => {
+                    // test block is not in this chunk (probably on a chunk boundary). We'll
+                    // ask the ChunkManager to check for us
+                    match chunk_manager {
+                        Some(chunk_manager) => {
+                            !chunk_manager.block_at(test_pos.to_world(self.origin))
+                        }
+                        None => {
+                            // no chunk manager provided (maybe hasn't been set up yet). So, if
+                            // we're on a chunk boundary, we'll set the
+                            // visibility to true
+
+                            true
+                        }
+                    }
+                }
+            };
+
+            visibilities.push((face, visible));
+        }
+
+        if let Ok(block_ref) = self.get_ref_mut(pos) {
+            if let Some(block_ref) = block_ref.as_mut(){
+                for (face, visible) in visibilities {
+                    block_ref.set_visible(face, visible);
+                }
+            }
         }
     }
 
@@ -214,17 +279,31 @@ impl Chunk {
         let mut test_pos_f32 = ray.pos.clone();
         for _ in 0..ray.n_tests {
             let test_pos = ChunkCoord::from(test_pos_f32);
-            if let Some(_) = self.get(test_pos) {
-                let result = RayResult::Block {
-                    loc: test_pos.to_world(self.origin),
-                    face: get_colliding_face(ray, test_pos_f32, test_pos.to_world(self.origin))
-                        .unwrap(),
-                    dist: test_pos_f32.to_vec().magnitude(),
-                };
+            match self.get(test_pos) {
+                Ok(get_res) => match get_res {
+                    Some(_) => {
+                        // there was a collision
+                        let result = RayResult::Block {
+                            loc: test_pos.to_world(self.origin),
+                            face: get_colliding_face(
+                                ray,
+                                test_pos_f32,
+                                test_pos.to_world(self.origin),
+                            )
+                            .unwrap(),
+                            dist: test_pos_f32.to_vec().magnitude(),
+                        };
 
-                debug!("{:?}", result);
+                        debug!("{:?}", result);
 
-                return result;
+                        return result;
+                    }
+                    None => {}
+                },
+                Err(_) => {
+                    // we've left the current chunk -> assume no ray hits
+                    return RayResult::None;
+                }
             }
 
             test_pos_f32 += iter_ray;
@@ -236,31 +315,72 @@ impl Chunk {
     where
         F: FnOnce(&mut Option<Block>),
     {
-        let mut block = self.get(ChunkCoord::from(block_loc));
-        f(&mut block)
+        match self.get(ChunkCoord::from(block_loc)) {
+            Ok(mut block) => f(&mut block),
+            Err(_) => {
+                // the specified block is not in this chunk
+                // not sure how this would come up - I'll leave
+                // it as a panic for now to see what scenarios trigger
+                // it and how they should be dealt with
+                todo!()
+            }
+        }
     }
 
     pub fn set_block(&mut self, loc: Point3<i32>, block: Block) -> Result<(), ()> {
         let coord = ChunkCoord::from(loc);
-        // Can only place in an empty location
-        if let Some(_) = self.get(coord) {
-            Err(())
-        } else {
-            let local_coords = coord.to_local(self.origin).unwrap();
-            self.blocks[local_coords.z][local_coords.y][local_coords.x] = Some(block);
-            Ok(())
+        match self.get(coord) {
+            Ok(block_loc) => match block_loc {
+                Some(_) => {
+                    // Can only place in an empty location
+                    Err(())
+                }
+                None => {
+                    let local_coords = coord.to_local(self.origin).unwrap();
+                    self.blocks[local_coords.z][local_coords.y][local_coords.x] = Some(block);
+
+                    //TODO: find a way to get the chunk manager passed in here
+                    self.update_exposure_block(coord, None);
+                    self.update_exposure_around(coord, None);
+
+                    Ok(())
+                }
+            },
+            Err(_) => Err(()),
         }
     }
 
     pub fn remove_block(&mut self, loc: Point3<i32>) -> Result<Block, ()> {
         let coord = ChunkCoord::from(loc);
-        // Can only place in an empty location
-        if let Some(block) = self.get(coord) {
-            let local_coords = coord.to_local(self.origin).unwrap();
-            self.blocks[local_coords.z][local_coords.y][local_coords.x] = None;
-            Ok(block)
-        } else {
-            Err(())
+        match self.get(coord) {
+            Ok(block_loc) => {
+                match block_loc {
+                    Some(block) => {
+                        let local_coords = coord.to_local(self.origin).unwrap();
+                        self.blocks[local_coords.z][local_coords.y][local_coords.x] = None;
+
+                        //TODO: find a way to get the chunk manager passed in here
+                        self.update_exposure_around(coord, None);
+
+                        Ok(block)
+                    }
+                    None => {
+                        // No block here
+                        Err(())
+                    }
+                }
+            }
+            Err(_) => {
+                // block is not in this chunk
+                Err(())
+            }
+        }
+    }
+
+    pub fn block_at(&self, coord: ChunkCoord) -> bool {
+        match self.get_ref(coord).unwrap_or(&None) {
+            Some(_) => true,
+            None => false,
         }
     }
 }
@@ -364,6 +484,20 @@ impl ChunkManager {
             chunk.remove_block(loc)
         } else {
             Err(())
+        }
+    }
+
+    pub fn block_at(&self, loc: Point3<i32>) -> bool {
+        let chunk_loc = block_to_chunk(loc);
+        if let Some(chunk) = self.chunks.get(&chunk_loc) {
+            let coord = ChunkCoord::from(loc);
+            if let Some(_) = chunk.get(coord).unwrap_or(None) {
+                true
+            } else {
+                false
+            }
+        } else {
+            false
         }
     }
 }
@@ -619,5 +753,68 @@ mod tests {
 
         // takeaway -> casting from float to i32/usize will NOT round;
         // rather, it clips to the integer portion
+    }
+
+    #[test]
+    fn test_chunk_coords() {
+        let c1 = Chunk::gen_empty_chunk(Point2::new(0, 0));
+        let c2 = Chunk::gen_empty_chunk(Point2::new(0, 16));
+
+        // cc1 should be in c1, not c2
+        let cc1 = ChunkCoord::from(Point3::new(0, 0, BOTTOM_DEPTH + 1));
+
+        match c1.get(cc1) {
+            Ok(block_loc) => match block_loc {
+                // block should be empty
+                Some(_) => assert!(false),
+                None => {}
+            },
+            // should be in there
+            Err(_) => assert!(false),
+        }
+
+        match c2.get(cc1) {
+            // block shouldb't be here
+            Ok(_) => assert!(false),
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn test_block_visibility_updates() {
+        let mut chunk = Chunk::gen_empty_chunk(Point2::new(0, 0));
+
+        let block_pos1 = Point3::new(0, 0, 0);
+        if let Err(_) = chunk.set_block(block_pos1, Block::new(BlockType::Dirt)) {
+            assert!(false, "failed to place a block");
+        }
+
+        // all faces of the block should be visible
+
+        let block1 = chunk
+            .get_ref(ChunkCoord::from(block_pos1))
+            .as_ref()
+            .unwrap()
+            .unwrap();
+
+        for face in BlockFace::iter() {
+            assert!(block1.visible(face));
+        }
+
+        // now, add a second block
+        let block_pos2 = Point3::new(1, 0, 0);
+        if let Err(_) = chunk.set_block(block_pos2, Block::new(BlockType::Dirt)) {
+            assert!(false, "failed to place a block");
+        }
+
+        let block2 = chunk
+            .get_ref(ChunkCoord::from(block_pos2))
+            .as_ref()
+            .unwrap()
+            .unwrap();
+
+        // XPos face on block 1 and XNeg face on block two should NOT be visible
+        assert_eq!(block1.visible(BlockFace::XPos), false);
+        assert_eq!(block2.visible(BlockFace::XNeg), false);
     }
 }
