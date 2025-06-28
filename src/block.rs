@@ -16,6 +16,7 @@ impl BlockType {
     }
 }
 
+//TODO: remove Copy
 #[derive(Debug, Clone, Copy)]
 pub struct Block {
     pub block_type: BlockType,
